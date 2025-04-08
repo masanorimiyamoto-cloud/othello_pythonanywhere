@@ -14,32 +14,35 @@
       background: #2e8b57; /* 緑色の盤面 */
     }
     td {
-      width: 60px;
-      height: 60px;
-      border: 2px solid #000;
-      text-align: center;
-      vertical-align: middle;
-      cursor: pointer;
-    }
-    .black, .white {
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .black {
-      background: #000;
-      box-shadow: inset 0 0 0 2px #fff;
-    }
-    .white {
-      background: #fff;
-      box-shadow: inset 0 0 0 2px #000;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin: 10px;
-    }
+    width: 60px;
+    height: 60px;
+    border: 2px solid #000;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    position: relative;   /* 石を絶対配置するために追加 */
+  }
+  td.black::before,
+  td.white::before {
+    content: "";
+    display: block;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  td.black::before {
+    background: #000;
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+  td.white::before {
+    background: #fff;
+    box-shadow: inset 0 0 0 2px #000;
+  }
+
   </style>
 </head>
 <body>
@@ -56,74 +59,108 @@
     {% for i in range(8) %}
       <tr>
       {% for j in range(8) %}
-        <td onclick="makeMove({{ i }}, {{ j }})"
-            class="{% if board[i][j] == 1 %}white{% elif board[i][j] == -1 %}black{% endif %}">
-          {% if board[i][j] == -1 %} ● {% elif board[i][j] == 1 %} ○ {% endif %}
+        <td
+          onclick="sendMove({{ i }}, {{ j }})"
+          class="{% if board[i][j] == 1 %}white{% elif board[i][j] == -1 %}black{% else %}{% endif %}"
+        >
+          {% if board[i][j] == -1 %}
+            ●
+          {% elif board[i][j] == 1 %}
+            ○
+          {% endif %}
         </td>
       {% endfor %}
       </tr>
     {% endfor %}
   </table>
+  
 
-  <script>
-    // クライアント側の盤面状態（初期盤面は全て0なので、サーバー側の初期配置とは別管理になります）
-    const board = Array(8).fill().map(() => Array(8).fill(0));
-    // 初期配置（中央に配置）を設定
-    board[3][3] = board[4][4] = 1;    // 白
-    board[3][4] = board[4][3] = -1;     // 黒
-
-    let currentTurn = -1; // -1: 黒, 1: 白
-
-    function makeMove(row, col) {
-      if (board[row][col] !== 0) {
-        alert("すでに石が置かれています！");
-        return;
-      }
-      board[row][col] = currentTurn;
-      updateBoardUI(); // 盤面更新
-      currentTurn = -currentTurn; // 手番切り替え
-    }
-
-    function updateBoardUI() {
+    <!-- 既存の <script>…</script> をまるっと置き換え -->
+    <script>
+      // サーバーから返ってくる盤面を描画する関数
+      function updateBoardUI(board) {
       const table = document.querySelector("table");
-      table.innerHTML = ""; // 現在の盤面をクリア
-      board.forEach((row, rowIndex) => {
+      table.innerHTML = ""; // クリア
+
+      board.forEach((row, i) => {
         const tr = document.createElement("tr");
-        row.forEach((cell, colIndex) => {
+
+        row.forEach((cell, j) => {
           const td = document.createElement("td");
-          td.onclick = () => makeMove(rowIndex, colIndex);
+          td.onclick = () => sendMove(i, j);
+
+          // ここで className をセット
           if (cell === -1) {
-            td.innerHTML = "<div class='black'></div>";
+            td.className = "black";
           } else if (cell === 1) {
-            td.innerHTML = "<div class='white'></div>";
+            td.className = "white";
+          } else {
+            td.className = "";  // 空セル
           }
+
           tr.appendChild(td);
         });
+
         table.appendChild(tr);
       });
-      // 更新された手番表示
-      const currentTurnElem = document.querySelector("#currentTurn");
-      if (currentTurnElem) {
-        currentTurnElem.innerText = currentTurn === -1 ? "黒 (●)" : "白 (○)";
-        currentTurnElem.style.color = currentTurn === -1 ? "black" : "gray";
-      }
     }
 
-    function resetBoard() {
-      // 盤面の初期化
-      for (let i = 0; i < board.length; i++) {
-        board[i].fill(0);
+  
+      // 手番表示更新
+      function updateTurnUI(turn) {
+        const el = document.getElementById("currentTurn");
+        el.innerText = turn === -1 ? "黒 ●" : "白 ○";
+        el.style.color = turn === -1 ? "black" : "gray";
       }
-      // 中央の初期配置
-      board[3][3] = board[4][4] = 1;    // 白
-      board[3][4] = board[4][3] = -1;     // 黒
-      currentTurn = -1; // 初期手番を黒に
-      updateBoardUI();
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      updateBoardUI(); // 初回盤面描画
-    });
-  </script>
+  
+      // サーバーに打ち手を送信
+      async function sendMove(row, col) {
+        const res = await fetch("/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ row, col })
+        });
+  
+        const data = await res.json();
+        if (data.status === "success" || data.status === "game_over") {
+          // 盤面と手番を更新
+          updateBoardUI(data.board);
+          updateTurnUI(data.turn);
+  
+          if (data.passed) {
+            alert("パスしました！");
+          }
+          if (data.status === "game_over") {
+            alert(`ゲーム終了！ 白: ${data.score.white} vs 黒: ${data.score.black}`);
+          }
+        } else if (data.status === "cell occupied") {
+          alert("すでに石が置かれています！");
+        } else {
+          alert("無効な手です");
+        }
+      }
+  
+      // サーバーリセット呼び出し
+      async function resetBoard() {
+        const res = await fetch("/reset", { method: "POST" });
+        const data = await res.json();
+        if (data.status === "reset") {
+          // サーバー側で初期化された盤面と手番を取得し描画
+          // （セッション上書き後、GET / で再描画でも OK）
+          const resp = await fetch("/");
+          const text = await resp.text();
+          // シンプルにリロード
+          window.location.reload();
+        }
+      }
+  
+      // 初期描画（ページロード時にサーバー描画済みなので DOM はすでに初期盤面）
+      document.addEventListener("DOMContentLoaded", () => {
+        // サーバー側で描画した初期盤面を再取得しておく場合は AJAX GET してもよいですが、
+        // ここではそのまま現状の DOM を使います。
+        // 以降の操作は sendMove/resetBoard を通じて反映されます。
+      });
+    </script>
+  
 </body>
 </html>
