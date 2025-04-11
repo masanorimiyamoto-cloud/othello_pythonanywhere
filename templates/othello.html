@@ -1,166 +1,187 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>オセロゲーム</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-    table {
-      border-collapse: collapse;
-      margin: 20px auto;
-      background: #2e8b57; /* 緑色の盤面 */
-    }
-    td {
-    width: 60px;
-    height: 60px;
-    border: 2px solid #000;
-    text-align: center;
-    vertical-align: middle;
-    cursor: pointer;
-    position: relative;   /* 石を絶対配置するために追加 */
-  }
-  td.black::before,
-  td.white::before {
-    content: "";
-    display: block;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-  td.black::before {
-    background: #000;
-    box-shadow: inset 0 0 0 2px #fff;
-  }
-  td.white::before {
-    background: #fff;
-    box-shadow: inset 0 0 0 2px #000;
-  }
-
-  </style>
+    <title>Othello (Multiplayer)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 2px; margin: 20px 0; }
+        .cell { 
+            width: 50px; height: 50px; 
+            background-color: #2e8b57; 
+            display: flex; justify-content: center; 
+            align-items: center; cursor: pointer;
+        }
+        .stone { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #333; }
+        .black { background-color: #222; }
+        .white { background-color: #fff; }
+        #status { font-size: 1.2em; margin: 10px 0; }
+        #game-controls { margin: 20px 0; }
+        input, button { padding: 8px; margin-right: 10px; }
+    </style>
 </head>
 <body>
-  <h1>オセロゲーム</h1>
-  <div>
-    <strong>現在の手番:</strong>
-    <!-- サーバーサイド描画部分（初回のみ使用、以降は JavaScript で更新） -->
-    <span id="currentTurn" style="color: {% if turn == -1 %}black{% else %}gray{% endif %}">
-      {% if turn == -1 %}黒 ●{% elif turn == 1 %}白 ○{% endif %}
-    </span>
-  </div>
-  <button onclick="resetBoard()">ゲームをリセット</button>
-  <table>
-    {% for i in range(8) %}
-      <tr>
-      {% for j in range(8) %}
-        <td
-          onclick="sendMove({{ i }}, {{ j }})"
-          class="{% if board[i][j] == 1 %}white{% elif board[i][j] == -1 %}black{% else %}{% endif %}"
-        >
-          {% if board[i][j] == -1 %}
-            ●
-          {% elif board[i][j] == 1 %}
-            ○
-          {% endif %}
-        </td>
-      {% endfor %}
-      </tr>
-    {% endfor %}
-  </table>
-  
+    <div id="game-controls">
+        <button id="create-room">Create Room</button>
+        <input id="room-id" placeholder="Room ID">
+        <button id="join-room">Join Room</button>
+    </div>
+    <div id="status">Waiting to join game...</div>
+    <div id="board"></div>
 
-    <!-- 既存の <script>…</script> をまるっと置き換え -->
     <script>
-      // サーバーから返ってくる盤面を描画する関数
-      function updateBoardUI(board) {
-      const table = document.querySelector("table");
-      table.innerHTML = ""; // クリア
+        const socket = io();
+        let currentGameId = null;
+        let playerId = 'player-' + Math.random().toString(36).substring(2, 9);
+        let yourColor = null;  // -1 が黒、1 が白
 
-      board.forEach((row, i) => {
-        const tr = document.createElement("tr");
-
-        row.forEach((cell, j) => {
-          const td = document.createElement("td");
-          td.onclick = () => sendMove(i, j);
-
-          // ここで className をセット
-          if (cell === -1) {
-            td.className = "black";
-          } else if (cell === 1) {
-            td.className = "white";
-          } else {
-            td.className = "";  // 空セル
+        // ボードの初期化
+        // 初期化時に空の盤面を作成
+      function initBoard() {
+          const board = document.getElementById('board');
+          board.innerHTML = '';
+          for (let row = 0; row < 8; row++) {
+              for (let col = 0; col < 8; col++) {
+                  const cell = document.createElement('div');
+                  cell.className = 'cell';
+                  cell.dataset.row = row;
+                  cell.dataset.col = col;
+                  cell.addEventListener('click', () => makeMove(row, col));
+                  
+                  // 初期石の配置 (デバッグ用)
+                  if ((row === 3 && col === 3) || (row === 4 && col === 4)) {
+                      const stone = document.createElement('div');
+                      stone.className = 'stone white';
+                      cell.appendChild(stone);
+                  } else if ((row === 3 && col === 4) || (row === 4 && col === 3)) {
+                      const stone = document.createElement('div');
+                      stone.className = 'stone black';
+                      cell.appendChild(stone);
+                  }
+                  
+                  board.appendChild(cell);
+              }
           }
+      }
 
-          tr.appendChild(td);
+      // サーバーから盤面データを受信した時の処理
+      socket.on('game_state', (data) => {
+          updateBoard(data.board);
+          document.getElementById('status').textContent = 
+              `Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+      });
+
+      // 石の更新処理 (改善版)
+      function updateBoard(board) {
+          for (let row = 0; row < 8; row++) {
+              for (let col = 0; col < 8; col++) {
+                  const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+                  cell.innerHTML = '';
+                  
+                  if (board[row][col] === -1) {
+                      const stone = document.createElement('div');
+                      stone.className = 'stone black';
+                      cell.appendChild(stone);
+                  } else if (board[row][col] === 1) {
+                      const stone = document.createElement('div');
+                      stone.className = 'stone white';
+                      cell.appendChild(stone);
+                  }
+              }
+          }
+      }
+              
+              // 手を打つ
+              function makeMove(row, col) {
+                  if (!currentGameId) {
+                      alert('Please join a game first!');
+                      return;
+                  }
+                  socket.emit('make_move', {
+                      game_id: currentGameId,
+                      player_id: playerId,
+                      row: row,
+                      col: col
+                  });
+              }
+        
+        // イベントリスナー
+        document.getElementById('create-room').addEventListener('click', () => {
+            fetch('/create_room')
+                .then(res => res.json())
+                .then(data => {
+                    currentGameId = data.game_id;
+                    document.getElementById('room-id').value = data.game_id;
+                    socket.emit('join_game', {
+                        game_id: data.game_id,
+                        player_id: playerId,
+                        name: 'Player-' + playerId.substring(0, 4)
+                    });
+                    document.getElementById('status').textContent = 'Room created. Waiting for opponent...';
+                });
+        });
+        
+        document.getElementById('join-room').addEventListener('click', () => {
+            const roomId = document.getElementById('room-id').value.trim();
+            if (!roomId) {
+                alert('Please enter a Room ID');
+                return;
+            }
+            currentGameId = roomId;
+            socket.emit('join_game', {
+                game_id: roomId,
+                player_id: playerId,
+                name: 'Player-' + playerId.substring(0, 4)
+            });
+            document.getElementById('status').textContent = 'Joining game...';
+        });
+        
+        // WebSocketイベント
+        socket.on('game_state', (data) => {
+            updateBoard(data.board);
+            const turnText = data.turn === -1 ? 'Black' : 'White';
+            
+            // 自分の色が分かっていれば「あなたの番です」も出せる
+            let status = `Turn: ${turnText}`;
+            if (yourColor !== null && data.turn === yourColor) {
+                status += ' (Your move)';
+            }
+            document.getElementById('status').textContent = status;
         });
 
-        table.appendChild(tr);
-      });
-    }
-
-  
-      // 手番表示更新
-      function updateTurnUI(turn) {
-        const el = document.getElementById("currentTurn");
-        el.innerText = turn === -1 ? "黒 ●" : "白 ○";
-        el.style.color = turn === -1 ? "black" : "gray";
-      }
-  
-      // サーバーに打ち手を送信
-      async function sendMove(row, col) {
-        const res = await fetch("/move", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ row, col })
+        socket.on('game_updated', (data) => {
+            updateBoard(data.board);
+            const turnText = data.turn === -1 ? 'Black' : 'White';
+            let status = `Turn: ${turnText}`;
+            if (yourColor !== null && data.turn === yourColor) {
+                status += ' (Your move)';
+            }
+            document.getElementById('status').textContent = status;
         });
-  
-        const data = await res.json();
-        if (data.status === "success" || data.status === "game_over") {
-          // 盤面と手番を更新
-          updateBoardUI(data.board);
-          updateTurnUI(data.turn);
-  
-          if (data.passed) {
-            alert("パスしました！");
-          }
-          if (data.status === "game_over") {
-            alert(`ゲーム終了！ 白: ${data.score.white} vs 黒: ${data.score.black}`);
-          }
-        } else if (data.status === "cell occupied") {
-          alert("すでに石が置かれています！");
-        } else {
-          alert("無効な手です");
-        }
-      }
-  
-      // サーバーリセット呼び出し
-      async function resetBoard() {
-        const res = await fetch("/reset", { method: "POST" });
-        const data = await res.json();
-        if (data.status === "reset") {
-          // サーバー側で初期化された盤面と手番を取得し描画
-          // （セッション上書き後、GET / で再描画でも OK）
-          const resp = await fetch("/");
-          const text = await resp.text();
-          // シンプルにリロード
-          window.location.reload();
-        }
-      }
-  
-      // 初期描画（ページロード時にサーバー描画済みなので DOM はすでに初期盤面）
-      document.addEventListener("DOMContentLoaded", () => {
-        // サーバー側で描画した初期盤面を再取得しておく場合は AJAX GET してもよいですが、
-        // ここではそのまま現状の DOM を使います。
-        // 以降の操作は sendMove/resetBoard を通じて反映されます。
-      });
+
+        
+        socket.on('error', (data) => {
+            alert('Error: ' + data.message);
+        });
+        socket.on('joined', (data) => {
+          // 自分の色を保存
+          yourColor = data.your_color;
+
+          // プレイヤー名と自分の色をステータスに表示
+          const me = data.players.find(p => p.id === playerId);
+          const opponent = data.players.find(p => p.id !== playerId);
+          const meName = me ? me.name : 'You';
+          const oppName = opponent ? opponent.name : 'Waiting...';
+          const meColor = yourColor === -1 ? 'Black' : 'White';
+
+          document.getElementById('status').textContent =
+            `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+          
+          // 盤面を初期描画
+          updateBoard(data.board);
+        });
+
+        // 初期化
+        initBoard();
     </script>
-  
 </body>
 </html>
