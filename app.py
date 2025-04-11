@@ -6,7 +6,8 @@ from game_manager import GameManager
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key")
+#app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 socketio = SocketIO(app)
 
 # ゲームマネージャーの初期化
