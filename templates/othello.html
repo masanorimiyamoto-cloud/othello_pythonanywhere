@@ -186,7 +186,7 @@
         
         // WebSocketイベント
         socket.on('game_state', (data) => {
-            updateBoard(data.board);
+            updateBoard(data.board, data.turn);
             const turnText = data.turn === -1 ? 'Black' : 'White';
             
             // 自分の色が分かっていれば「あなたの番です」も出せる
@@ -198,7 +198,7 @@
         });
 
         socket.on('game_updated', (data) => {
-            updateBoard(data.board);
+            updateBoard(data.board, data.turn);
             const turnText = data.turn === -1 ? 'Black' : 'White';
             let status = `Turn: ${turnText}`;
             if (yourColor !== null && data.turn === yourColor) {
@@ -225,8 +225,8 @@
           document.getElementById('status').textContent =
             `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
           
-          // 盤面を初期描画
-          updateBoard(data.board);
+          /// 盤面を初期描画（手番も渡す）
+          updateBoard(data.board, data.turn);
         });
 
         // 初期化
