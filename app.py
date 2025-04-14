@@ -70,9 +70,9 @@ def handle_join_game(data):
 
 @socketio.on("make_move")
 def handle_move(data):
-    game_id   = data.get("game_id")
+    game_id = data.get("game_id")
     player_id = data.get("player_id")
-    row, col  = data.get("row"), data.get("col")
+    row, col = data.get("row"), data.get("col")
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
@@ -81,45 +81,57 @@ def handle_move(data):
 
     players = game_data["players"]
     try:
-        player_index = next(i for i,p in enumerate(players) if p.id == player_id)
+        player_index = next(i for i, p in enumerate(players) if p.id == player_id)
     except StopIteration:
         emit("error", {"message": "Player not in game"})
         return
 
     expected_turn = -1 if player_index == 0 else 1
-    # デバッグログ（必要に応じてコメントアウトしてください）
-    
-
     if game_data["game"].turn != expected_turn:
         emit("error", {"message": "Not your turn"})
         return
 
     result = game_data["game"].make_move(row, col)
-    # もし次のターンが AI の番なら
-    if game_data["game"].turn == 1 and ai_player_id in [p.id for p in game_data["players"]]:
-        # AI が手を選ぶ
-        r, c = ai.choose_move(game_data["game"])
-        result = game_data["game"].make_move(r, c)
-        # ブロードキャスト
-        emit("game_state", {
-            "board": game_data["game"].board,
-            "turn":  game_data["game"].turn,
-            "last_move": [r, c]
-        }, room=game_id)
-    # 無効手は弾く
     if result["status"] in ("cell occupied", "invalid move"):
         emit("error", {"message": result.get("message", "Invalid move")})
         return
 
-    # 成功 or 終了 の両方で更新を送信
+    # ゲーム状態を送信
     payload = {
-        "board":     game_data["game"].board,
-        "turn":      game_data["game"].turn,
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
         "last_move": [row, col]
     }
+
+    # ゲーム終了チェック
     if result["status"] == "game_over":
         payload["status"] = "game_over"
-        payload["score"]  = result["score"]
+        payload["score"] = result["score"]
+        emit("game_state", payload, room=game_id)
+        return
+
+    # AIのターン処理
+    if (game_data["game"].turn == -1 and 
+    ai_player_id in [p.id for p in game_data["players"]] and
+    game_data["game"].has_valid_moves()):
+    
+
+        
+        try:
+            r, c = ai.choose_move(game_data["game"])
+            ai_result = game_data["game"].make_move(r, c)
+            
+            # AIの手後の状態を更新
+            payload["board"] = game_data["game"].board
+            payload["turn"] = game_data["game"].turn
+            payload["last_move"] = [r, c]
+            
+            if ai_result["status"] == "game_over":
+                payload["status"] = "game_over"
+                payload["score"] = ai_result["score"]
+            
+        except Exception as e:
+            print(f"AI move error: {e}")
 
     emit("game_state", payload, room=game_id)
 
