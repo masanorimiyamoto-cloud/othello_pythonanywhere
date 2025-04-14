@@ -2,6 +2,11 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit, join_room
 from game_manager import GameManager
 import os
+# app.py の中
+from othello_ai import OthelloAI
+
+ai_player_id = "AI"
+ai = OthelloAI(max_depth=3)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key")
@@ -28,6 +33,8 @@ def handle_join_game(data):
     game_id   = data["game_id"]
     player_id = data["player_id"]
     name      = data.get("name", "Player")
+    if data.get("mode") == "single":  # シングルプレイ指定なら
+        game_manager.add_player(game_id, ai_player_id, name="Computer")
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
@@ -81,14 +88,24 @@ def handle_move(data):
 
     expected_turn = -1 if player_index == 0 else 1
     # デバッグログ（必要に応じてコメントアウトしてください）
-    print(f"[DEBUG] player_index={player_index}, expected_turn={expected_turn}, game.turn={game_data['game'].turn}")
+    
 
     if game_data["game"].turn != expected_turn:
         emit("error", {"message": "Not your turn"})
         return
 
     result = game_data["game"].make_move(row, col)
-
+    # もし次のターンが AI の番なら
+    if game_data["game"].turn == 1 and ai_player_id in [p.id for p in game_data["players"]]:
+        # AI が手を選ぶ
+        r, c = ai.choose_move(game_data["game"])
+        result = game_data["game"].make_move(r, c)
+        # ブロードキャスト
+        emit("game_state", {
+            "board": game_data["game"].board,
+            "turn":  game_data["game"].turn,
+            "last_move": [r, c]
+        }, room=game_id)
     # 無効手は弾く
     if result["status"] in ("cell occupied", "invalid move"):
         emit("error", {"message": result.get("message", "Invalid move")})

@@ -22,6 +22,7 @@
 </head>
 <body>
     <div id="game-controls">
+        <button id="create-single">Single Player</button>
         <button id="create-room">Create Room</button>
         <input id="room-id" placeholder="Room ID">
         <button id="join-room">Join Room</button>
@@ -52,7 +53,7 @@
                 }
             }
         }
-
+        
         // ８方向ベクトル
         const directions = [
             {dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},
@@ -128,6 +129,19 @@
         }
 
         // イベントリスナー
+        document.getElementById('create-single').onclick = () => {
+            fetch('/create_room')
+            .then(res => res.json())
+            .then(data => {
+                currentGameId = data.game_id;
+                socket.emit('join_game', {
+                game_id: data.game_id,
+                player_id: playerId,
+                name: 'You',
+                mode: 'single'
+                });
+            });
+        };
         document.getElementById('create-room').addEventListener('click', () => {
             fetch('/create_room')
                 .then(res => res.json())
