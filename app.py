@@ -118,8 +118,9 @@ def handle_move(data):
 
     # AIのターン処理（修正箇所）
     if (game_data["game"].turn == 1 and  # 白のターン（AI）か確認
-        ai_player_id in [p.id for p in game_data["players"]] and
-        game_data["game"].has_valid_moves()):
+    ai_player_id in [p.id for p in game_data["players"]] and
+    game_data["game"].has_valid_move(game_data["game"].turn)):
+
         
         try:
             r, c = ai.choose_move(game_data["game"])
