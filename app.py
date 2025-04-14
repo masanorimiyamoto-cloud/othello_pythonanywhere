@@ -33,39 +33,41 @@ def handle_join_game(data):
     game_id   = data["game_id"]
     player_id = data["player_id"]
     name      = data.get("name", "Player")
-    if data.get("mode") == "single":  # シングルプレイ指定なら
-        game_manager.add_player(game_id, ai_player_id, name="Computer")
-
+    
     game_data = game_manager.get_game(game_id)
     if not game_data:
         emit("error", {"message": "Game not found"})
         return
 
+    # まず、人間プレイヤーを追加
     if not game_manager.add_player(game_id, player_id, name):
         emit("error", {"message": "Game is full"})
         return
 
+    # シングルプレイの場合のみ、次に AI を追加
+    if data.get("mode") == "single":
+        game_manager.add_player(game_id, ai_player_id, name="Computer")
+
     join_room(game_id)
 
-    # プレイヤーリスト＆自分の色
+    # プレイヤーリスト＆自分の色の決定
     players = game_data["players"]
-    idx = next(i for i,p in enumerate(players) if p.id == player_id)
+    idx = next(i for i, p in enumerate(players) if p.id == player_id)
     color = -1 if idx == 0 else 1
 
-    # 参加成功イベント
     emit("joined", {
-        "players":     [{"id": p.id, "name": p.name} for p in players],
-        "your_color":  color,
-        "board":       game_data["game"].board,
-        "turn":        game_data["game"].turn
+        "players":    [{"id": p.id, "name": p.name} for p in players],
+        "your_color": color,
+        "board":      game_data["game"].board,
+        "turn":       game_data["game"].turn
     })
 
-    # 全員に初期状態をブロードキャスト
     emit("game_state", {
-        "board":     game_data["game"].board,
-        "turn":      game_data["game"].turn,
-        "players":   [{"id": p.id, "name": p.name} for p in players]
+        "board":    game_data["game"].board,
+        "turn":     game_data["game"].turn,
+        "players":  [{"id": p.id, "name": p.name} for p in players]
     }, room=game_id)
+
 
 
 @socketio.on("make_move")
@@ -109,8 +111,7 @@ def handle_move(data):
         payload["score"] = result["score"]
         emit("game_state", payload, room=game_id)
         return
-
-    
+ 
     
     # ...（既存のコードはそのまま）
 
