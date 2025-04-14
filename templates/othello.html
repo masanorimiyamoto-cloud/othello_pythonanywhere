@@ -186,6 +186,8 @@
 
         socket.on('game_state', (data) => {
             console.log("GAME_STATE:", data);
+            console.log("Current Turn:", data.turn);
+            console.log("Your Color:", yourColor);
             updateBoard(data.board, data.turn);
 
         // ステータス行を組み立て

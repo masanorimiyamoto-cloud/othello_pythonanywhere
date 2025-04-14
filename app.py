@@ -97,6 +97,7 @@ def handle_move(data):
     if result["status"] in ("cell occupied", "invalid move"):
         emit("error", {"message": result.get("message", "Invalid move")})
         return
+    print(f"Player {player_id} (expected: {expected_turn}) is trying to move when turn is {game_data['game'].turn}")
 
     # ゲーム状態を送信
     payload = {
