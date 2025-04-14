@@ -110,18 +110,19 @@ def handle_move(data):
         emit("game_state", payload, room=game_id)
         return
 
-    # AIのターン処理
-    if (game_data["game"].turn == -1 and 
-    ai_player_id in [p.id for p in game_data["players"]] and
-    game_data["game"].has_valid_moves()):
     
+    
+    # ...（既存のコードはそのまま）
 
+    # AIのターン処理（修正箇所）
+    if (game_data["game"].turn == 1 and  # 白のターン（AI）か確認
+        ai_player_id in [p.id for p in game_data["players"]] and
+        game_data["game"].has_valid_moves()):
         
         try:
             r, c = ai.choose_move(game_data["game"])
             ai_result = game_data["game"].make_move(r, c)
             
-            # AIの手後の状態を更新
             payload["board"] = game_data["game"].board
             payload["turn"] = game_data["game"].turn
             payload["last_move"] = [r, c]
@@ -133,6 +134,7 @@ def handle_move(data):
         except Exception as e:
             print(f"AI move error: {e}")
 
+    
     emit("game_state", payload, room=game_id)
 
 
