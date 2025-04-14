@@ -27,6 +27,9 @@
         <button id="join-room">Join Room</button>
     </div>
     <div id="status">Waiting to join game...</div>
+    
+    <div id="score" style="font-size:1.2em; margin:10px 0;"></div>
+
     <div id="board"></div>
 
     <script>
@@ -170,10 +173,33 @@
         socket.on('game_state', (data) => {
             console.log("GAME_STATE:", data);
             updateBoard(data.board, data.turn);
+
+        // ステータス行を組み立て
+        let statusText;
+        if (data.status === 'game_over') {
+            // ゲーム終了時はスコア表示
+            const w = data.score.white;
+            const b = data.score.black;
+            statusText = `Game Over — White: ${w}, Black: ${b}`;
+            // 合わせて、合法手ハイライトやクリックは無効化
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('legal-move'));
+        } else {
+            // 通常ターン表示
             const turnText = data.turn === -1 ? 'Black' : 'White';
-            let status = `Turn: ${turnText}`;
-            if (yourColor === data.turn) status += ' (Your move)';
-            document.getElementById('status').textContent = status;
+            statusText = `Turn: ${turnText}`;
+            if (yourColor !== null && data.turn === yourColor) {
+            statusText += ' (Your move)';
+            }
+        }
+        document.getElementById('status').textContent = statusText;
+
+        // スコア要素にも出しておく（終了時のみ）
+        const scoreEl = document.getElementById('score');
+        if (data.status === 'game_over') {
+            scoreEl.textContent = `Final Score — White: ${w}, Black: ${b}`;
+        } else {
+            scoreEl.textContent = '';
+        }
         });
 
         socket.on('error', (data) => {
