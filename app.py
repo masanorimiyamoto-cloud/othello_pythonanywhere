@@ -100,16 +100,23 @@ def handle_move(data):
 
     # ③ 合法手チェックは OthelloGame.make_move に任せつつ
     result = game_data["game"].make_move(row, col)
-    if result["status"] != "success":
-        emit("error", {"message": result.get("message", "Invalid move")})
-        return
 
-    # ④ 成功時に全員へ更新を送信
-    emit("game_state", {
-        "board":     game_data["game"].board,
-        "turn":      game_data["game"].turn,
-        "last_move": [row, col]
-    }, room=game_id)
++    # 成功 or ゲーム終了 のいずれもボード更新を送信
++    if result["status"] == "cell occupied" or result["status"] == "invalid move":
++        emit("error", {"message": result.get("message", "Invalid move")})
++        return
+
+
++    # ④ 成功／終了時に全員へ更新を送信
++    payload = {
++        "board":     game_data["game"].board,
++        "turn":      game_data["game"].turn,
++        "last_move": [row, col]
++    }
++    if result["status"] == "game_over":
++        payload["status"] = "game_over"
++        payload["score"]  = result["score"]
++    emit("game_state", payload, room=game_id)
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)
