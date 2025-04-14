@@ -14,6 +14,7 @@
         .stone { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #333; }
         .black { background-color: #222; }
         .white { background-color: #fff; }
+        .legal-move { box-shadow: inset 0 0 0 3px yellow; }
         #status { font-size: 1.2em; margin: 10px 0; }
         #game-controls { margin: 20px 0; }
         input, button { padding: 8px; margin-right: 10px; }
@@ -34,125 +35,95 @@
         let playerId = 'player-' + Math.random().toString(36).substring(2, 9);
         let yourColor = null;  // -1 が黒、1 が白
 
-        // ボードの初期化
-        // 初期化時に空の盤面を作成
-      function initBoard() {
-          const board = document.getElementById('board');
-          board.innerHTML = '';
-          for (let row = 0; row < 8; row++) {
-              for (let col = 0; col < 8; col++) {
-                  const cell = document.createElement('div');
-                  cell.className = 'cell';
-                  cell.dataset.row = row;
-                  cell.dataset.col = col;
-                  cell.addEventListener('click', () => makeMove(row, col));
-                  
-                  // 初期石の配置 (デバッグ用)
-                  if ((row === 3 && col === 3) || (row === 4 && col === 4)) {
-                      const stone = document.createElement('div');
-                      stone.className = 'stone white';
-                      cell.appendChild(stone);
-                  } else if ((row === 3 && col === 4) || (row === 4 && col === 3)) {
-                      const stone = document.createElement('div');
-                      stone.className = 'stone black';
-                      cell.appendChild(stone);
-                  }
-                  
-                  board.appendChild(cell);
-              }
-          }
-      }
-     
-            // ８方向ベクトル
-            const directions = [
-                {dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},
-                {dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}
-            ];
+        // 初期化
+        function initBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    board.appendChild(cell);
+                }
+            }
+        }
 
-            // 合法手リストを返す (board: 2次元配列, color: -1 or 1)
-            function computeLegalMoves(board, color) {
-                const opponent = -color;
-                const moves = [];
-                for (let y = 0; y < 8; y++) {
+        // ８方向ベクトル
+        const directions = [
+            {dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},
+            {dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}
+        ];
+
+        // 合法手計算
+        function computeLegalMoves(board, color) {
+            const opponent = -color;
+            const moves = [];
+            for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     if (board[y][x] !== 0) continue;
                     for (const {dx,dy} of directions) {
-                    let nx = x + dx, ny = y + dy;
-                    let hasOpp = false;
-                    while (0 <= nx && nx < 8 && 0 <= ny && ny < 8 && board[ny][nx] === opponent) {
-                        hasOpp = true;
-                        nx += dx; ny += dy;
-                    }
-                    if (hasOpp && 0 <= nx && nx < 8 && 0 <= ny && ny < 8 && board[ny][nx] === color) {
-                        moves.push({x, y});
-                        break;
-                    }
+                        let nx = x + dx, ny = y + dy;
+                        let hasOpp = false;
+                        while (0 <= nx && nx < 8 && 0 <= ny && ny < 8 && board[ny][nx] === opponent) {
+                            hasOpp = true; nx += dx; ny += dy;
+                        }
+                        if (hasOpp && 0 <= nx && nx < 8 && 0 <= ny && ny < 8 && board[ny][nx] === color) {
+                            moves.push({x, y});
+                            break;
+                        }
                     }
                 }
+            }
+            return moves;
+        }
+
+        // 盤面更新
+        function updateBoard(board, turn) {
+            // 1) クリア
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+                    cell.innerHTML = '';
+                    cell.classList.remove('legal-move');
+                    cell.onclick = null;
                 }
-                return moves;
             }
-
-
-      // サーバーから盤面データを受信した時の処理
-      socket.on('game_state', (data) => {
-          updateBoard(data.board);
-          document.getElementById('status').textContent = 
-              `Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-      });
-
-      // 石の更新処理 (改善版)
-            function updateBoard(board, turn) {
-        // １）全セルをクリア
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-            const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-            cell.innerHTML = '';
-            cell.onclick = null;
-            cell.classList.remove('legal-move');
+            // 2) 石描画
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    if (board[y][x] === -1 || board[y][x] === 1) {
+                        const s = document.createElement('div');
+                        s.className = `stone ${board[y][x] === -1 ? 'black' : 'white'}`;
+                        document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`).appendChild(s);
+                    }
+                }
             }
-        }
-
-        // ２）石を再描画
-        for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-            const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-            if (board[y][x] === -1) {
-                const s = document.createElement('div');
-                s.className = 'stone black';
-                cell.appendChild(s);
-            } else if (board[y][x] === 1) {
-                const s = document.createElement('div');
-                s.className = 'stone white';
-                cell.appendChild(s);
-            }
+            // 3) 合法手ハイライト＆クリック
+            if (turn === yourColor) {
+                const legal = computeLegalMoves(board, turn);
+                legal.forEach(({x, y}) => {
+                    const c = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+                    c.classList.add('legal-move');
+                    c.onclick = () => makeMove(y, x);
+                });
             }
         }
 
-        // ３）合法手を計算・ハイライト＆クリック許可
-        const legal = computeLegalMoves(board, turn);
-        legal.forEach(({x, y}) => {
-            const c = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-            c.classList.add('legal-move');
-            c.onclick = () => makeMove(y, x);
-        });
+        // 手を打つ
+        function makeMove(row, col) {
+            if (!currentGameId) {
+                alert('Please join a game first!');
+                return;
+            }
+            socket.emit('make_move', {
+                game_id: currentGameId,
+                player_id: playerId,
+                row, col
+            });
         }
 
-              
-              // 手を打つ
-              function makeMove(row, col) {
-                  if (!currentGameId) {
-                      alert('Please join a game first!');
-                      return;
-                  }
-                  socket.emit('make_move', {
-                      game_id: currentGameId,
-                      player_id: playerId,
-                      row: row,
-                      col: col
-                  });
-              }
-        
         // イベントリスナー
         document.getElementById('create-room').addEventListener('click', () => {
             fetch('/create_room')
@@ -163,73 +134,53 @@
                     socket.emit('join_game', {
                         game_id: data.game_id,
                         player_id: playerId,
-                        name: 'Player-' + playerId.substring(0, 4)
+                        name: 'Player-' + playerId.substring(7)
                     });
                     document.getElementById('status').textContent = 'Room created. Waiting for opponent...';
                 });
         });
-        
+
         document.getElementById('join-room').addEventListener('click', () => {
             const roomId = document.getElementById('room-id').value.trim();
-            if (!roomId) {
-                alert('Please enter a Room ID');
-                return;
-            }
+            if (!roomId) return alert('Please enter a Room ID');
             currentGameId = roomId;
             socket.emit('join_game', {
                 game_id: roomId,
                 player_id: playerId,
-                name: 'Player-' + playerId.substring(0, 4)
+                name: 'Player-' + playerId.substring(7)
             });
             document.getElementById('status').textContent = 'Joining game...';
         });
-        
-        // WebSocketイベント
+
+        // WebSocketハンドラ
+        socket.on('joined', (data) => {
+            console.log("JOINED:", data);
+            yourColor = data.your_color;
+            const me    = data.players.find(p => p.id === playerId);
+            const opp   = data.players.find(p => p.id !== playerId);
+            const meName  = me ? me.name : 'You';
+            const oppName = opp ? opp.name : 'Waiting...';
+            const meColor = yourColor === -1 ? 'Black' : 'White';
+            document.getElementById('status').textContent =
+                `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+            initBoard();
+            updateBoard(data.board, data.turn);
+        });
+
         socket.on('game_state', (data) => {
-            updateBoard(data.board, data.turn);
-            const turnText = data.turn === -1 ? 'Black' : 'White';
-            
-            // 自分の色が分かっていれば「あなたの番です」も出せる
-            let status = `Turn: ${turnText}`;
-            if (yourColor !== null && data.turn === yourColor) {
-                status += ' (Your move)';
-            }
-            document.getElementById('status').textContent = status;
-        });
-
-        socket.on('game_updated', (data) => {
+            console.log("GAME_STATE:", data);
             updateBoard(data.board, data.turn);
             const turnText = data.turn === -1 ? 'Black' : 'White';
             let status = `Turn: ${turnText}`;
-            if (yourColor !== null && data.turn === yourColor) {
-                status += ' (Your move)';
-            }
+            if (yourColor === data.turn) status += ' (Your move)';
             document.getElementById('status').textContent = status;
         });
 
-        
         socket.on('error', (data) => {
             alert('Error: ' + data.message);
         });
-        socket.on('joined', (data) => {
-          // 自分の色を保存
-          yourColor = data.your_color;
 
-          // プレイヤー名と自分の色をステータスに表示
-          const me = data.players.find(p => p.id === playerId);
-          const opponent = data.players.find(p => p.id !== playerId);
-          const meName = me ? me.name : 'You';
-          const oppName = opponent ? opponent.name : 'Waiting...';
-          const meColor = yourColor === -1 ? 'Black' : 'White';
-
-          document.getElementById('status').textContent =
-            `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-          
-          /// 盤面を初期描画（手番も渡す）
-          updateBoard(data.board, data.turn);
-        });
-
-        // 初期化
+        // 初期描画
         initBoard();
     </script>
 </body>

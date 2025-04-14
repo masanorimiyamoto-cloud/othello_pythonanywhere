@@ -1,5 +1,5 @@
-from flask import Flask, render_template, session
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit, join_room
 from game_manager import GameManager
 import os
 
@@ -12,24 +12,16 @@ game_manager = GameManager()
 
 @app.route("/")
 def index():
-    """ゲームルーム作成ページ"""
     return render_template("othello.html")
 
 @app.route("/create_room")
 def create_room():
-    """新しいゲームルームを作成"""
     game_id = game_manager.create_game()
     return {"game_id": game_id}
 
-# WebSocketイベントハンドラ
 @socketio.on("connect")
 def handle_connect():
-    """クライアント接続時"""
     emit("connection_established", {"message": "Connected"})
-
-from flask_socketio import join_room, emit
-
-
 
 @socketio.on("join_game")
 def handle_join_game(data):
@@ -48,28 +40,25 @@ def handle_join_game(data):
 
     join_room(game_id)
 
-    # プレイヤーリスト
+    # プレイヤーリスト＆自分の色
     players = game_data["players"]
-    # 自分のインデックスを取得
     idx = next(i for i,p in enumerate(players) if p.id == player_id)
-    # 先着0番が黒(-1)、1番が白(1)
     color = -1 if idx == 0 else 1
 
-    # 参加成功＋自分の色を通知
+    # 参加成功イベント
     emit("joined", {
-        "players": [{"id": p.id, "name": p.name} for p in players],
-        "your_color": color,
-        "board":  game_data["game"].board,
-        "turn":   game_data["game"].turn
+        "players":     [{"id": p.id, "name": p.name} for p in players],
+        "your_color":  color,
+        "board":       game_data["game"].board,
+        "turn":        game_data["game"].turn
     })
-    
-    # 全員に現在の状態を更新（既存コードの game_state 送信）
+
+    # 全員に初期状態をブロードキャスト
     emit("game_state", {
         "board":     game_data["game"].board,
         "turn":      game_data["game"].turn,
         "players":   [{"id": p.id, "name": p.name} for p in players]
     }, room=game_id)
-
 
 
 @socketio.on("make_move")
@@ -83,7 +72,6 @@ def handle_move(data):
         emit("error", {"message": "Game not found"})
         return
 
-    # ① プレイヤーリストから送信者のインデックス（0 or 1）を探す
     players = game_data["players"]
     try:
         player_index = next(i for i,p in enumerate(players) if p.id == player_id)
@@ -91,24 +79,22 @@ def handle_move(data):
         emit("error", {"message": "Player not in game"})
         return
 
-    # ② game.turn との照合
-    #    例: game.turn == -1 が黒、1 が白、player_index 0 を黒、1 を白 と割り当てる場合
     expected_turn = -1 if player_index == 0 else 1
+    # デバッグログ（必要に応じてコメントアウトしてください）
     print(f"[DEBUG] player_index={player_index}, expected_turn={expected_turn}, game.turn={game_data['game'].turn}")
+
     if game_data["game"].turn != expected_turn:
         emit("error", {"message": "Not your turn"})
         return
 
-    # ③ 合法手チェックは OthelloGame.make_move に任せつつ
     result = game_data["game"].make_move(row, col)
 
-    # 成功 or ゲーム終了 のいずれもボード更新を送信
-    if result["status"] == "cell occupied" or result["status"] == "invalid move":
-      emit("error", {"message": result.get("message", "Invalid move")})
-    return
+    # 無効手は弾く
+    if result["status"] in ("cell occupied", "invalid move"):
+        emit("error", {"message": result.get("message", "Invalid move")})
+        return
 
-
-    # ④ 成功／終了時に全員へ更新を送信
+    # 成功 or 終了 の両方で更新を送信
     payload = {
         "board":     game_data["game"].board,
         "turn":      game_data["game"].turn,
@@ -117,7 +103,9 @@ def handle_move(data):
     if result["status"] == "game_over":
         payload["status"] = "game_over"
         payload["score"]  = result["score"]
+
     emit("game_state", payload, room=game_id)
+
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)
