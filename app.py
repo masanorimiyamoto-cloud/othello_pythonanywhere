@@ -94,6 +94,7 @@ def handle_move(data):
     # ② game.turn との照合
     #    例: game.turn == -1 が黒、1 が白、player_index 0 を黒、1 を白 と割り当てる場合
     expected_turn = -1 if player_index == 0 else 1
+    print(f"[DEBUG] player_index={player_index}, expected_turn={expected_turn}, game.turn={game_data['game'].turn}")
     if game_data["game"].turn != expected_turn:
         emit("error", {"message": "Not your turn"})
         return
