@@ -1,12 +1,10 @@
-
 from flask import Flask, render_template, session
 from flask_socketio import SocketIO, emit
 from game_manager import GameManager
 import os
 
 app = Flask(__name__)
-#app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key")
-app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key")
 socketio = SocketIO(app)
 
 # ゲームマネージャーの初期化
@@ -31,7 +29,7 @@ def handle_connect():
 
 from flask_socketio import join_room, emit
 
-from flask_socketio import join_room, emit
+
 
 @socketio.on("join_game")
 def handle_join_game(data):
