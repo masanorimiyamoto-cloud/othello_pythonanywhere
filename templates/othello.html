@@ -23,6 +23,13 @@
 <body>
     <div id="game-controls">
         <button id="create-single">Single Player</button>
+        <select id="ai-level">
+            <option value="4" selected>Level 4 (Easy)</option>
+            <option value="5">Level 5 (Medium)</option>
+            <option value="6">Level 6 (Hard)</option>
+        </select>
+        <button id="start-ai-game">Start vs AI</button>
+    
         <button id="create-room">Create Room</button>
         <input id="room-id" placeholder="Room ID">
         <button id="join-room">Join Room</button>
@@ -142,6 +149,12 @@
                 });
             });
         };
+        // othello.js (クライアント側)
+        document.getElementById('start-ai-game').addEventListener('click', () => {
+                    const level = parseInt(document.getElementById('ai-level').value, 10);
+                    socket.emit('start_ai_game', { level });
+        });
+
         document.getElementById('create-room').addEventListener('click', () => {
             fetch('/create_room')
                 .then(res => res.json())

@@ -19,7 +19,8 @@ class GameManager:
             "players": []
         }
         return game_id
-    
+    def add_ai(self, game_id, ai: OthelloAI):
+        self.games[game_id]["ai"] = ai
     def get_game(self, game_id: str) -> Optional[dict]:
         """game_idに対応するゲーム状態を取得"""
         return self.games.get(game_id)

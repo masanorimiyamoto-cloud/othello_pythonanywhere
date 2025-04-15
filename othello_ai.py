@@ -3,8 +3,16 @@ from othello import OthelloGame
 import math
 
 class OthelloAI:
-    def __init__(self, max_depth=3):
-        self.max_depth = max_depth
+    LEVEL_DEPTH = {
+        4: 4,
+        5: 6,
+        6: 8,
+    }
+
+    def __init__(self, level=4):
+        # レベルから深度を決定。存在しなければデフォルト4
+        self.max_depth = self.LEVEL_DEPTH.get(level, 4)
+        
 
     def evaluate(self, board):
         # 単純に石の差を評価
