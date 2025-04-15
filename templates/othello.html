@@ -141,6 +141,7 @@
             .then(res => res.json())
             .then(data => {
                 currentGameId = data.game_id;
+                document.getElementById('room-id').value = data.game_id;
                 socket.emit('join_game', {
                 game_id: data.game_id,
                 player_id: playerId,
@@ -151,9 +152,20 @@
         };
         // othello.js (クライアント側)
         document.getElementById('start-ai-game').addEventListener('click', () => {
-                    const level = parseInt(document.getElementById('ai-level').value, 10);
-                    socket.emit('start_ai_game', { level });
-        });
+            const level  = parseInt(document.getElementById('ai-level').value, 10);
+            const gameId = document.getElementById('room-id').value.trim();  // ← ここで取得
+
+            if (!gameId) {
+                alert('Please create or join a room first.');
+                return;
+            }
+
+            socket.emit('start_ai_game', {
+                level:    level,
+                game_id:  gameId   // ← 必ず game_id キーで送る
+            });
+            });
+
 
         document.getElementById('create-room').addEventListener('click', () => {
             fetch('/create_room')
