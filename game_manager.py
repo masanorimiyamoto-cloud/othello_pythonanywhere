@@ -1,7 +1,7 @@
 import uuid
 from typing import Dict, Optional
 from othello import OthelloGame
-
+from othello_ai import OthelloAI    # 追加：AIクラスをインポート
 class Player:
     def __init__(self, player_id: str, name: str = ""):
         self.id = player_id
