@@ -4,9 +4,9 @@ import math
 
 class OthelloAI:
     LEVEL_DEPTH = {
-        3: 3,
-        4: 5,
-        5: 7,
+        3: 2,
+        4: 4,
+        5: 6,
     }
 
     def __init__(self, level=4):

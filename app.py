@@ -25,10 +25,19 @@ def create_room():
 @socketio.on("connect")
 def handle_connect():
     emit("connection_established", {"message": "Connected"})
+def start_singleplayer():
+    # 新規部屋を作成
+    game_id = game_manager.create_game()
+    # ユーザーを追加
+    player_id = "player-" + generate_unique_suffix()
+    game_manager.add_player(game_id, player_id, name="Player")
+    
+    # AIの生成は on_start_ai で行うため、ここでは追加しない
+    return {"game_id": game_id}
 
 @socketio.on("start_ai_game")
 def on_start_ai(data):
-    level   = data.get("level", 4)
+    level = data.get("level", 4)
     game_id = data.get("game_id")
     if not game_id:
         emit("error", {"message": "No game_id provided"})
@@ -39,11 +48,11 @@ def on_start_ai(data):
         emit("error", {"message": "Game not found"})
         return
 
-    # AIインスタンス生成＆保存
+    # AIインスタンス生成＆保存（ここで初めて生成）
     ai = OthelloAI(level=level)
     game_data["ai"] = ai
 
-    # AIをプレイヤーリストに追加（IDは固定）
+    # AIをプレイヤーリストに追加
     game_manager.add_player(game_id, ai_player_id, name="Computer")
 
     # 全員に開始通知
