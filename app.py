@@ -35,22 +35,37 @@ def start_singleplayer():
     # AIの生成は on_start_ai で行うため、ここでは追加しない
     return {"game_id": game_id}
 
-@socketio.on("start_ai_game")
+@socketio.on('start_ai_game')
 def on_start_ai(data):
     level = data.get('level', 4)
     game_id = data.get('game_id')
-
-    # 部屋IDがなければ自動的に部屋を作成
     if not game_id:
         game_id = game_manager.create_game()
-        # 作成された部屋IDは、クライアント側でも使えるように送信します
+        print(f"Created new game with ID: {game_id}")
         emit("room_created", {"game_id": game_id})
-    # ここでクライアントを部屋に参加させる
-        join_room(game_id)
+    
+    join_room(game_id)
+    print(f"Client joined room: {game_id}")
+
     game_data = game_manager.get_game(game_id)
     if not game_data:
         emit("error", {"message": "Game not found"})
         return
+
+    ai = OthelloAI(level=level)
+    game_data["ai"] = ai
+
+    game_manager.add_player(game_id, ai_player_id, name="Computer")
+    print("AI player added")
+
+    emit('game_started', {
+        "game_id": game_id,
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
+        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
+    }, room=game_id)
+    print("Sent game_started event")
+
 
     # AIインスタンス生成＆保存
     ai = OthelloAI(level=level)
