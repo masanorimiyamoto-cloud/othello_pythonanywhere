@@ -45,7 +45,8 @@ def on_start_ai(data):
         game_id = game_manager.create_game()
         # 作成された部屋IDは、クライアント側でも使えるように送信します
         emit("room_created", {"game_id": game_id})
-
+    # ここでクライアントを部屋に参加させる
+        join_room(game_id)
     game_data = game_manager.get_game(game_id)
     if not game_data:
         emit("error", {"message": "Game not found"})
