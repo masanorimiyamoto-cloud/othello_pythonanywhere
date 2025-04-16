@@ -138,7 +138,7 @@
         // イベントリスナー
         
         // Modify the "Start vs AI" button handler
-　　document.getElementById('start-ai-game').addEventListener('click', () => {
+　  document.getElementById('start-ai-game').addEventListener('click', () => {
     const level = parseInt(document.getElementById('ai-level').value, 10);
     const gameId = document.getElementById('room-id').value.trim();
     
@@ -153,8 +153,8 @@
     });
 });
 
+        
         // Update the 'joined' handler
-        / Update the 'joined' handler
         socket.on('joined', (data) => {
             console.log("JOINED DATA:", data);
             yourColor = data.your_color;  // Should be -1 for human in AI mode
