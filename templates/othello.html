@@ -22,11 +22,11 @@
 </head>
 <body>
     <div id="game-controls">
-        <button id="create-single">Single Player</button>
+       
         <select id="ai-level">
-            <option value="4" selected>Level 4 (Easy)</option>
-            <option value="5">Level 5 (Medium)</option>
-            <option value="6">Level 6 (Hard)</option>
+            <option value="3" selected>Level 3 (Easy)</option>
+            <option value="4">Level 4 (Medium)</option>
+            <option value="5">Level 5 (Hard)</option>
         </select>
         <button id="start-ai-game">Start vs AI</button>
     
@@ -136,20 +136,7 @@
         }
 
         // イベントリスナー
-        document.getElementById('create-single').onclick = () => {
-            fetch('/create_room')
-            .then(res => res.json())
-            .then(data => {
-                currentGameId = data.game_id;
-                document.getElementById('room-id').value = data.game_id;
-                socket.emit('join_game', {
-                game_id: data.game_id,
-                player_id: playerId,
-                name: 'You',
-                mode: 'single'
-                });
-            });
-        };
+        
         // othello.js (クライアント側)
         document.getElementById('start-ai-game').addEventListener('click', () => {
             const level  = parseInt(document.getElementById('ai-level').value, 10);
