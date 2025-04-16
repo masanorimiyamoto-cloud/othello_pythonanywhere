@@ -137,21 +137,22 @@
 
         // イベントリスナー
         
-        // othello.js (クライアント側)
+        // "Start vs AI" ボタンのハンドラ
         document.getElementById('start-ai-game').addEventListener('click', () => {
-            const level  = parseInt(document.getElementById('ai-level').value, 10);
-            const gameId = document.getElementById('room-id').value.trim();  // ← ここで取得
+        const level = parseInt(document.getElementById('ai-level').value, 10);
+        // 部屋IDが入力されていれば使い、なければ空文字（サーバー側で自動作成される）
+        const gameId = document.getElementById('room-id').value.trim();
+        socket.emit('start_ai_game', {
+            level: level,
+            game_id: gameId
+        });
+        });
 
-            if (!gameId) {
-                alert('Please create or join a room first.');
-                return;
-            }
+        // サーバーから新しく作成した部屋IDを受け取る
+        socket.on('room_created', data => {
+        document.getElementById('room-id').value = data.game_id;
+        });
 
-            socket.emit('start_ai_game', {
-                level:    level,
-                game_id:  gameId   // ← 必ず game_id キーで送る
-            });
-            });
 
 
         document.getElementById('create-room').addEventListener('click', () => {
