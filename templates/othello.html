@@ -139,26 +139,38 @@
         
         // "Start vs AI" ボタンのハンドラ
         document.getElementById('start-ai-game').addEventListener('click', () => {
-            const level = parseInt(document.getElementById('ai-level').value, 10);
-            const gameId = document.getElementById('room-id').value.trim();
-            
+        const level  = parseInt(document.getElementById('ai-level').value, 10);
+        const gameId = document.getElementById('room-id').value.trim(); // 入力欄の値を取得
         socket.emit('start_ai_game', {
-                level: level,
-                game_id: gameId || undefined  // Send undefined if empty to let server generate
-            });
+            level: level,
+            game_id: gameId  // 空でもOK（サーバー側で自動生成される）
         });
+        });
+         
+         
+         
 
         // サーバーから新しく作成した部屋IDを受け取る
+        // サーバーから部屋が作成されたときのイベント
         socket.on('room_created', data => {
+        console.log("Room created:", data.game_id);
         document.getElementById('room-id').value = data.game_id;
+        currentGameId = data.game_id;  // ここでグローバル変数を更新
         });
+
 
         socket.on('game_started', data => {
         console.log("Game started event received:", data);
-        updateBoard(data.board);  // 盤面描画関数
+        // もし data に game_id が含まれていれば、グローバル変数を更新
+        if (data.game_id) {
+            document.getElementById('room-id').value = data.game_id;
+            currentGameId = data.game_id;
+        }
+        updateBoard(data.board);  // 盤面描画関数を呼ぶ
         document.getElementById('status').textContent =
             `Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
         });
+
 
 
 
