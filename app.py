@@ -146,6 +146,7 @@ def handle_move(data):
         "turn":      game_data["game"].turn,
         "last_move": [row, col]
     }
+    print(f"Player {player_id} (expected_turn: {expected_turn}), actual turn: {game_data['game'].turn}")
 
     # ゲーム終了チェック
     if result["status"] == "game_over":
