@@ -92,35 +92,35 @@
 
         // 盤面更新
         function updateBoard(board, turn) {
-            // 1) クリア
+            // Clear the board first
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.innerHTML = '';
+                cell.classList.remove('legal-move');
+                cell.onclick = null;
+            });
+
+            // Draw stones
             for (let y = 0; y < 8; y++) {
                 for (let x = 0; x < 8; x++) {
                     const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-                    cell.innerHTML = '';
-                    cell.classList.remove('legal-move');
-                    cell.onclick = null;
-                }
-            }
-            // 2) 石描画
-            for (let y = 0; y < 8; y++) {
-                for (let x = 0; x < 8; x++) {
                     if (board[y][x] === -1 || board[y][x] === 1) {
-                        const s = document.createElement('div');
-                        s.className = `stone ${board[y][x] === -1 ? 'black' : 'white'}`;
-                        document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`).appendChild(s);
+                        const stone = document.createElement('div');
+                        stone.className = `stone ${board[y][x] === -1 ? 'black' : 'white'}`;
+                        cell.appendChild(stone);
                     }
                 }
             }
-            // 3) 合法手ハイライト＆クリック
-            if (turn === yourColor) {
-                const legal = computeLegalMoves(board, turn);
-                legal.forEach(({x, y}) => {
-                    const c = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-                    c.classList.add('legal-move');
-                    c.onclick = () => makeMove(y, x);
-                });
-            }
-        }
+
+    // Highlight legal moves if it's our turn
+    if (yourColor !== null && turn === yourColor) {
+        const legalMoves = computeLegalMoves(board, yourColor);
+        legalMoves.forEach(move => {
+            const cell = document.querySelector(`.cell[data-row="${move.y}"][data-col="${move.x}"]`);
+            cell.classList.add('legal-move');
+            cell.onclick = () => makeMove(move.y, move.x);
+        });
+    }
+}
 
         // 手を打つ
         function makeMove(row, col) {
