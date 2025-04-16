@@ -40,7 +40,7 @@ def start_singleplayer():
 def on_start_ai(data):
     level = data.get('level', 4)
     game_id = data.get('game_id')
-    client_player_id = data.get('player_id')  # Get player_id from client
+    client_player_id = data.get('player_id')  # Get from client
     
     if not game_id:
         game_id = game_manager.create_game()
@@ -53,38 +53,33 @@ def on_start_ai(data):
         emit("error", {"message": "Game not found"})
         return
 
-    # Add human player if not already added
-    if not any(p.id == client_player_id for p in game_data["players"]):
-        game_manager.add_player(game_id, client_player_id, name="Human")
+    # Clear existing players if any (for fresh AI game)
+    game_data["players"] = []
+    
+    # Add human player first (will be Black)
+    game_manager.add_player(game_id, client_player_id, name="Human")
+    
+    # Initialize AI (will be White)
+    ai = OthelloAI(level=level)
+    game_data["ai"] = ai
+    game_manager.add_player(game_id, ai_player_id, name="Computer")
 
-    # Initialize AI if not already present
-    if "ai" not in game_data:
-        ai = OthelloAI(level=level)
-        game_data["ai"] = ai
-        game_manager.add_player(game_id, ai_player_id, name="Computer")
-
-    # Determine player colors
-    players = game_data["players"]
-    human_player = next((p for p in players if p.id == client_player_id), None)
-    if human_player:
-        # Human is always Black (-1), AI is White (1)
-        your_color = -1
-    else:
-        your_color = None
+    # Force turn to Black (-1) at game start
+    game_data["game"].turn = -1
 
     emit('joined', {
         "game_id": game_id,
-        "players": [{"id": p.id, "name": p.name} for p in players],
-        "your_color": your_color,
+        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
+        "your_color": -1,  # Human is always Black in AI mode
         "board": game_data["game"].board,
-        "turn": game_data["game"].turn
+        "turn": game_data["game"].turn  # Should be -1 now
     }, room=game_id)
 
     emit('game_state', {
         "board": game_data["game"].board,
         "turn": game_data["game"].turn,
-        "players": players,
-        "your_color": your_color
+        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
+        "your_color": -1  # Explicitly set human color
     }, room=game_id)
     
 @socketio.on("join_game")
@@ -124,9 +119,9 @@ def handle_join_game(data):
 
 @socketio.on("make_move")
 def handle_move(data):
-    game_id   = data.get("game_id")
+    game_id = data.get("game_id")
     player_id = data.get("player_id")
-    row, col  = data.get("row"), data.get("col")
+    row, col = data.get("row"), data.get("col")
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
@@ -140,9 +135,15 @@ def handle_move(data):
         emit("error", {"message": "Player not in game"})
         return
 
+    # Human is always index 0 (Black), AI is index 1 (White)
     expected_turn = -1 if player_index == 0 else 1
+    
+    # Debug output
+    print(f"\nPlayer {player_id} (index:{player_index}) attempting move")
+    print(f"Expected turn: {expected_turn}, Actual turn: {game_data['game'].turn}")
+    
     if game_data["game"].turn != expected_turn:
-        emit("error", {"message": "Not your turn"})
+        emit("error", {"message": f"Not your turn (Expected:{expected_turn}, Actual:{game_data['game'].turn})"})
         return
 
     result = game_data["game"].make_move(row, col)
@@ -150,32 +151,40 @@ def handle_move(data):
         emit("error", {"message": result.get("message", "Invalid move")})
         return
 
+    # Prepare payload with serializable data only
     payload = {
-        "board":     game_data["game"].board,
-        "turn":      game_data["game"].turn,
-        "last_move": [row, col]
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
+        "last_move": [row, col],
+        "status": "ongoing"
     }
-    print(f"Player {player_id} (expected_turn: {expected_turn}), actual turn: {game_data['game'].turn}")
 
-    # ゲーム終了チェック
     if result["status"] == "game_over":
         payload["status"] = "game_over"
-        payload["score"]  = result["score"]
-        emit("game_state", payload, room=game_id)
-        return
+        payload["score"] = {
+            "white": int(result["score"]["white"]),
+            "black": int(result["score"]["black"])
+        }
 
-    # AIのターン処理
+    # AI move handling
     ai = game_data.get("ai")
-    if ai and game_data["game"].turn == 1 and game_data["game"].has_valid_move(1):
+    if (ai and payload["status"] == "ongoing" and 
+        game_data["game"].turn == 1 and 
+        game_data["game"].has_valid_move(1)):
+        
         r, c = ai.choose_move(game_data["game"])
         ai_result = game_data["game"].make_move(r, c)
-
-        payload["board"]     = game_data["game"].board
-        payload["turn"]      = game_data["game"].turn
+        
+        payload["board"] = game_data["game"].board
+        payload["turn"] = game_data["game"].turn
         payload["last_move"] = [r, c]
+        
         if ai_result["status"] == "game_over":
             payload["status"] = "game_over"
-            payload["score"]  = ai_result["score"]
+            payload["score"] = {
+                "white": int(ai_result["score"]["white"]),
+                "black": int(ai_result["score"]["black"])
+            }
 
     emit("game_state", payload, room=game_id)
 
