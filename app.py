@@ -1,4 +1,5 @@
-from flask import Flask, render_template
+
+from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room
 from game_manager import GameManager
 from othello_ai import OthelloAI
@@ -55,8 +56,8 @@ def on_start_ai(data):
     ai = OthelloAI(level=level)
     game_data["ai"] = ai
     
-    # Add human player (the one who clicked the button)
-    player_id = request.sid  # Use socket.io's session ID
+    # Add human player (use the socket ID as player ID)
+    player_id = request.sid  # Now this will work with the Flask request import
     game_manager.add_player(game_id, player_id, name="Human")
     
     # Add AI player
@@ -71,6 +72,12 @@ def on_start_ai(data):
         "your_color": your_color,
         "board": game_data["game"].board,
         "turn": game_data["game"].turn
+    }, room=game_id)
+    
+    emit('game_state', {
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
+        "players": [{"id": player_id, "name": "Human"}, {"id": ai_player_id, "name": "Computer"}]
     }, room=game_id)
     
     emit('game_state', {
