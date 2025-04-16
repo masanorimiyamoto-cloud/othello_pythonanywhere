@@ -139,20 +139,20 @@
         
         // "Start vs AI" ボタンのハンドラ
         document.getElementById('start-ai-game').addEventListener('click', () => {
-        const level = parseInt(document.getElementById('ai-level').value, 10);
-        // 部屋IDが入力されていれば使い、なければ空文字（サーバー側で自動作成される）
-        const gameId = document.getElementById('room-id').value.trim();
+            const level = parseInt(document.getElementById('ai-level').value, 10);
+            const gameId = document.getElementById('room-id').value.trim();
+            
         socket.emit('start_ai_game', {
-            level: level,
-            game_id: gameId
-        });
+                level: level,
+                game_id: gameId || undefined  // Send undefined if empty to let server generate
+            });
         });
 
         // サーバーから新しく作成した部屋IDを受け取る
         socket.on('room_created', data => {
         document.getElementById('room-id').value = data.game_id;
         });
-        
+
         socket.on('game_started', data => {
         console.log("Game started event received:", data);
         updateBoard(data.board);  // 盤面描画関数
@@ -193,13 +193,17 @@
         socket.on('joined', (data) => {
             console.log("JOINED:", data);
             yourColor = data.your_color;
-            const me    = data.players.find(p => p.id === playerId);
-            const opp   = data.players.find(p => p.id !== playerId);
-            const meName  = me ? me.name : 'You';
+            
+            const me = data.players.find(p => p.id === playerId || p.id === socket.id);
+            const opp = data.players.find(p => p.id !== playerId && p.id !== socket.id);
+            
+            const meName = me ? me.name : 'You';
             const oppName = opp ? opp.name : 'Waiting...';
             const meColor = yourColor === -1 ? 'Black' : 'White';
+            
             document.getElementById('status').textContent =
                 `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+            
             initBoard();
             updateBoard(data.board, data.turn);
         });
