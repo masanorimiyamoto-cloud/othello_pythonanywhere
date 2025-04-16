@@ -137,10 +137,41 @@
 
         // イベントリスナー
         
-        // "Start vs AI" button handler
-        document.getElementById('start-ai-game').addEventListener('click', () => {
-        const level = parseInt(document.getElementById('ai-level').value, 10);
-        const gameId = document.getElementById('room-id').value.trim();
+        // Modify the "Start vs AI" button handler
+　　document.getElementById('start-ai-game').addEventListener('click', () => {
+    const level = parseInt(document.getElementById('ai-level').value, 10);
+    const gameId = document.getElementById('room-id').value.trim();
+    
+    // Reset game state
+    yourColor = null;
+    currentGameId = null;
+    
+    socket.emit('start_ai_game', {
+        level: level,
+        game_id: gameId,
+        player_id: playerId  // Send our playerId
+    });
+});
+
+        // Update the 'joined' handler
+        / Update the 'joined' handler
+        socket.on('joined', (data) => {
+            console.log("JOINED DATA:", data);
+            yourColor = data.your_color;  // Should be -1 for human in AI mode
+            currentGameId = data.game_id;
+            
+            const me = data.players.find(p => p.id === playerId);
+            const opp = data.players.find(p => p.id !== playerId);
+            
+            document.getElementById('status').textContent = 
+                `You (Black) vs Computer (White) | Turn: ${data.turn === -1 ? 'Black (Your move)' : 'White'}`;
+            
+            initBoard();
+            updateBoard(data.board, data.turn);
+            
+            // Debug output
+            console.log("Your color:", yourColor, "Current turn:", data.turn);
+       
         
         // Include playerId in the emit
         socket.emit('start_ai_game', {
