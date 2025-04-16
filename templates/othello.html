@@ -137,15 +137,18 @@
 
         // イベントリスナー
         
-        // "Start vs AI" ボタンのハンドラ
+        // "Start vs AI" button handler
         document.getElementById('start-ai-game').addEventListener('click', () => {
-        const level  = parseInt(document.getElementById('ai-level').value, 10);
-        const gameId = document.getElementById('room-id').value.trim(); // 入力欄の値を取得
+        const level = parseInt(document.getElementById('ai-level').value, 10);
+        const gameId = document.getElementById('room-id').value.trim();
+        
+        // Include playerId in the emit
         socket.emit('start_ai_game', {
             level: level,
-            game_id: gameId  // 空でもOK（サーバー側で自動生成される）
+            game_id: gameId,
+            player_id: playerId  // Make sure to send our playerId
         });
-        });
+    });
          
          
          
@@ -201,62 +204,57 @@
             document.getElementById('status').textContent = 'Joining game...';
         });
 
-        // WebSocketハンドラ
-        socket.on('joined', (data) => {
-            console.log("JOINED:", data);
-            yourColor = data.your_color;
-            
-            const me = data.players.find(p => p.id === playerId || p.id === socket.id);
-            const opp = data.players.find(p => p.id !== playerId && p.id !== socket.id);
-            
-            const meName = me ? me.name : 'You';
-            const oppName = opp ? opp.name : 'Waiting...';
-            const meColor = yourColor === -1 ? 'Black' : 'White';
-            
-            document.getElementById('status').textContent =
-                `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-            
-            initBoard();
-            updateBoard(data.board, data.turn);
-        });
+        /// Update the 'joined' event handler
+    socket.on('joined', (data) => {
+    console.log("JOINED:", data);
+    yourColor = data.your_color;  // This should be -1 for human in AI mode
+    
+    const me = data.players.find(p => p.id === playerId);
+    const opp = data.players.find(p => p.id !== playerId);
+    
+    const meName = me ? me.name : 'You';
+    const oppName = opp ? opp.name : 'Waiting...';
+    const meColor = yourColor === -1 ? 'Black' : 'White';
+    
+    document.getElementById('status').textContent =
+        `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+    
+    initBoard();
+    updateBoard(data.board, data.turn);
+    
+    // Debug output
+    console.log("Your color:", yourColor, "Current turn:", data.turn);
+    console.log("Legal moves:", computeLegalMoves(data.board, yourColor));
+    });
 
-        socket.on('game_state', (data) => {
-            console.log("GAME_STATE:", data);
-            console.log("Current Turn:", data.turn);
-            console.log("Your Color:", yourColor);
-            updateBoard(data.board, data.turn);
+    // Update the 'game_state' handler
+    socket.on('game_state', (data) => {
+    console.log("GAME_STATE:", data);
+    updateBoard(data.board, data.turn);
 
-        // ステータス行を組み立て
-        let statusText;
-        if (data.status === 'game_over') {
-            // ゲーム終了時はスコア表示
-            const w = data.score.white;
-            const b = data.score.black;
-            statusText = `Game Over — White: ${w}, Black: ${b}`;
-            // 合わせて、合法手ハイライトやクリックは無効化
-            document.querySelectorAll('.cell').forEach(c => c.classList.remove('legal-move'));
-        } else {
-            // 通常ターン表示
-            const turnText = data.turn === -1 ? 'Black' : 'White';
-            statusText = `Turn: ${turnText}`;
-            if (yourColor !== null && data.turn === yourColor) {
+    let statusText;
+    if (data.status === 'game_over') {
+        const w = data.score.white;
+        const b = data.score.black;
+        statusText = `Game Over — White: ${w}, Black: ${b}`;
+        document.querySelectorAll('.cell').forEach(c => c.classList.remove('legal-move'));
+    } else {
+        const turnText = data.turn === -1 ? 'Black' : 'White';
+        statusText = `Turn: ${turnText}`;
+        if (yourColor !== null && data.turn === yourColor) {
             statusText += ' (Your move)';
-            }
         }
-        document.getElementById('status').textContent = statusText;
+    }
+    document.getElementById('status').textContent = statusText;
 
-        // スコア要素にも出しておく（終了時のみ）
-        const scoreEl = document.getElementById('score');
-        if (data.status === 'game_over') {
-            scoreEl.textContent = `Final Score — White: ${w}, Black: ${b}`;
-        } else {
-            scoreEl.textContent = '';
-        }
-        });
-
-        socket.on('error', (data) => {
-            alert('Error: ' + data.message);
-        });
+    // Update score display
+    const scoreEl = document.getElementById('score');
+    if (data.status === 'game_over') {
+        scoreEl.textContent = `Final Score — White: ${data.score.white}, Black: ${data.score.black}`;
+    } else {
+        scoreEl.textContent = '';
+    }
+    });
 
         // 初期描画
         initBoard();
