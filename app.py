@@ -40,51 +40,43 @@ def start_singleplayer():
 def on_start_ai(data):
     level = data.get('level', 4)
     game_id = data.get('game_id')
-    
+    # クライアント側のIDを request.sid を利用して取得（または data に渡されている場合も）
+    player_id = data.get('player_id', request.sid)
+
+    # 部屋IDがなければ自動で部屋を作成
     if not game_id:
         game_id = game_manager.create_game()
+        print(f"Auto-created game with ID: {game_id}")
         emit("room_created", {"game_id": game_id})
     
+    # クライアントを部屋に参加させる
     join_room(game_id)
-    
+    print(f"Client joined room: {game_id}")
+
     game_data = game_manager.get_game(game_id)
     if not game_data:
         emit("error", {"message": "Game not found"})
         return
-    
-    # Initialize AI
+
+    # 人間プレイヤーがまだ登録されていなければ追加（同じプレイヤーIDで重複しないように）
+    if not any(p.id == player_id for p in game_data["players"]):
+        game_manager.add_player(game_id, player_id, name="Player")
+        print(f"Human player added: {player_id}")
+
+    # AI インスタンスの生成および登録
     ai = OthelloAI(level=level)
     game_data["ai"] = ai
-    
-    # Add human player (use the socket ID as player ID)
-    player_id = request.sid  # Now this will work with the Flask request import
-    game_manager.add_player(game_id, player_id, name="Human")
-    
-    # Add AI player
     game_manager.add_player(game_id, ai_player_id, name="Computer")
-    
-    # Set human player color (black goes first)
-    your_color = -1  # Human is black
-    
-    emit('joined', {
+    print("AI player added")
+
+    # ゲーム開始イベントの送信
+    emit('game_started', {
         "game_id": game_id,
-        "players": [{"id": player_id, "name": "Human"}, {"id": ai_player_id, "name": "Computer"}],
-        "your_color": your_color,
-        "board": game_data["game"].board,
-        "turn": game_data["game"].turn
-    }, room=game_id)
-    
-    emit('game_state', {
         "board": game_data["game"].board,
         "turn": game_data["game"].turn,
-        "players": [{"id": player_id, "name": "Human"}, {"id": ai_player_id, "name": "Computer"}]
+        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
     }, room=game_id)
-    
-    emit('game_state', {
-        "board": game_data["game"].board,
-        "turn": game_data["game"].turn,
-        "players": [{"id": player_id, "name": "Human"}, {"id": ai_player_id, "name": "Computer"}]
-    }, room=game_id)
+    print("Sent game_started event")
 
 @socketio.on("join_game")
 def handle_join_game(data):
