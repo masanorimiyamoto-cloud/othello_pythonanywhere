@@ -117,76 +117,90 @@ def handle_join_game(data):
         "players": [{"id": p.id, "name": p.name} for p in players]
     }, room=game_id)
 
+    # app.py の handle_move 関数を修正
 @socketio.on("make_move")
 def handle_move(data):
-    game_id = data.get("game_id")
-    player_id = data.get("player_id")
-    row, col = data.get("row"), data.get("col")
+        game_id = data.get("game_id")
+        player_id = data.get("player_id")
+        row, col = data.get("row"), data.get("col")
 
-    game_data = game_manager.get_game(game_id)
-    if not game_data:
-        emit("error", {"message": "Game not found"})
-        return
+        game_data = game_manager.get_game(game_id)
+        if not game_data:
+            emit("error", {"message": "Game not found"})
+            return
 
-    players = game_data["players"]
-    try:
-        player_index = next(i for i, p in enumerate(players) if p.id == player_id)
-    except StopIteration:
-        emit("error", {"message": "Player not in game"})
-        return
+        players = game_data["players"]
+        try:
+            player_index = next(i for i, p in enumerate(players) if p.id == player_id)
+        except StopIteration:
+            emit("error", {"message": "Player not in game"})
+            return
 
-    # Human is always index 0 (Black), AI is index 1 (White)
-    expected_turn = -1 if player_index == 0 else 1
-    
-    # Debug output
-    print(f"\nPlayer {player_id} (index:{player_index}) attempting move")
-    print(f"Expected turn: {expected_turn}, Actual turn: {game_data['game'].turn}")
-    
-    if game_data["game"].turn != expected_turn:
-        emit("error", {"message": f"Not your turn (Expected:{expected_turn}, Actual:{game_data['game'].turn})"})
-        return
+        # Human is always index 0 (Black), AI is index 1 (White)
+        expected_turn = -1 if player_index == 0 else 1
+        
+        # Debug output
+        print(f"\nPlayer {player_id} (index:{player_index}) attempting move")
+        print(f"Expected turn: {expected_turn}, Actual turn: {game_data['game'].turn}")
+        
+        if game_data["game"].turn != expected_turn:
+            emit("error", {"message": f"Not your turn (Expected:{expected_turn}, Actual:{game_data['game'].turn})"})
+            return
 
-    result = game_data["game"].make_move(row, col)
-    if result["status"] in ("cell occupied", "invalid move"):
-        emit("error", {"message": result.get("message", "Invalid move")})
-        return
+        result = game_data["game"].make_move(row, col)
+        if result["status"] in ("cell occupied", "invalid move"):
+            emit("error", {"message": result.get("message", "Invalid move")})
+            return
 
-    # Prepare payload with serializable data only
-    payload = {
-        "board": game_data["game"].board,
-        "turn": game_data["game"].turn,
-        "last_move": [row, col],
-        "status": "ongoing"
-    }
-
-    if result["status"] == "game_over":
-        payload["status"] = "game_over"
-        payload["score"] = {
-            "white": int(result["score"]["white"]),
-            "black": int(result["score"]["black"])
+        # まずプレイヤーの手の結果だけを送信
+        human_move_payload = {
+            "board": game_data["game"].board,
+            "turn": game_data["game"].turn,
+            "last_move": [row, col],
+            "status": "ongoing",
+            "player_move": True  # プレイヤーの手であることを示すフラグ
         }
 
-    # AI move handling
-    ai = game_data.get("ai")
-    if (ai and payload["status"] == "ongoing" and 
-        game_data["game"].turn == 1 and 
-        game_data["game"].has_valid_move(1)):
-        
-        r, c = ai.choose_move(game_data["game"])
-        ai_result = game_data["game"].make_move(r, c)
-        
-        payload["board"] = game_data["game"].board
-        payload["turn"] = game_data["game"].turn
-        payload["last_move"] = [r, c]
-        
-        if ai_result["status"] == "game_over":
-            payload["status"] = "game_over"
-            payload["score"] = {
-                "white": int(ai_result["score"]["white"]),
-                "black": int(ai_result["score"]["black"])
+        if result["status"] == "game_over":
+            human_move_payload["status"] = "game_over"
+            human_move_payload["score"] = {
+                "white": int(result["score"]["white"]),
+                "black": int(result["score"]["black"])
             }
 
-    emit("game_state", payload, room=game_id)
+        # プレイヤーの手だけを先に送信
+        emit("game_state", human_move_payload, room=game_id)
+
+        # ゲームが終了していなければ、AIの手を考える
+        ai = game_data.get("ai")
+        if (ai and human_move_payload["status"] == "ongoing" and 
+            game_data["game"].turn == 1 and 
+            game_data["game"].has_valid_move(1)):
+            
+            # 少し遅延を入れる代わりに、AI処理開始のフラグをクライアントに送信
+            emit("ai_thinking", {}, room=game_id)
+            
+            # AIの手を計算
+            r, c = ai.choose_move(game_data["game"])
+            ai_result = game_data["game"].make_move(r, c)
+            
+            # AIの手の結果を送信
+            ai_move_payload = {
+                "board": game_data["game"].board,
+                "turn": game_data["game"].turn,
+                "last_move": [r, c],
+                "status": "ongoing",
+                "ai_move": True  # AIの手であることを示すフラグ
+            }
+            
+            if ai_result["status"] == "game_over":
+                ai_move_payload["status"] = "game_over"
+                ai_move_payload["score"] = {
+                    "white": int(ai_result["score"]["white"]),
+                    "black": int(ai_result["score"]["black"])
+                }
+                
+            emit("game_state", ai_move_payload, room=game_id)
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)

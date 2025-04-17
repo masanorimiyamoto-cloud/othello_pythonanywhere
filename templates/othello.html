@@ -18,6 +18,15 @@
         #status { font-size: 1.2em; margin: 10px 0; }
         #game-controls { margin: 20px 0; }
         input, button { padding: 8px; margin-right: 10px; }
+        /* 最後に置かれたセルをひときわ光らせる */
+        .cell.last-move {
+        animation: flash 1s ease-out;
+        }
+        @keyframes flash {
+        0%   { box-shadow: 0 0 0 4px rgba(255,255,0,0.8); }
+        100% { box-shadow: 0 0 0   rgba(255,255,0,0); }
+        }
+
     </style>
 </head>
 <body>
@@ -45,6 +54,22 @@
         let currentGameId = null;
         let playerId = 'player-' + Math.random().toString(36).substring(2, 9);
         let yourColor = null;  // -1 が黒、1 が白
+        let prevLastMove = null;  // 前回のハイライト保持
+        let lastBoard = null;  // holds the previous board state
+        function highlightLastMove(row, col) {
+        console.log(`🚀 highlightLastMove called for: (${row}, ${col})`);
+        if (prevLastMove) {
+            const [pr, pc] = prevLastMove;
+            document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`)
+                    ?.classList.remove("last-move");
+        }
+        const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+        if (cell) {
+            cell.classList.add("last-move");
+            console.log("🚀 added last-move class to cell", cell);
+            prevLastMove = [row, col];
+        }
+        }
 
         // 初期化
         function initBoard() {
@@ -111,16 +136,16 @@
                 }
             }
 
-    // Highlight legal moves if it's our turn
-    if (yourColor !== null && turn === yourColor) {
-        const legalMoves = computeLegalMoves(board, yourColor);
-        legalMoves.forEach(move => {
-            const cell = document.querySelector(`.cell[data-row="${move.y}"][data-col="${move.x}"]`);
-            cell.classList.add('legal-move');
-            cell.onclick = () => makeMove(move.y, move.x);
-        });
-    }
-}
+            // Highlight legal moves if it's our turn
+            if (yourColor !== null && turn === yourColor) {
+                const legalMoves = computeLegalMoves(board, yourColor);
+                legalMoves.forEach(move => {
+                    const cell = document.querySelector(`.cell[data-row="${move.y}"][data-col="${move.x}"]`);
+                    cell.classList.add('legal-move');
+                    cell.onclick = () => makeMove(move.y, move.x);
+                });
+            }
+        }
 
         // 手を打つ
         function makeMove(row, col) {
@@ -134,52 +159,42 @@
                 row, col
             });
         }
+        
 
         // イベントリスナー
         
         // Modify the "Start vs AI" button handler
-　  document.getElementById('start-ai-game').addEventListener('click', () => {
-    const level = parseInt(document.getElementById('ai-level').value, 10);
-    const gameId = document.getElementById('room-id').value.trim();
-    
-    // Reset game state
-    yourColor = null;
-    currentGameId = null;
-    
-    socket.emit('start_ai_game', {
-        level: level,
-        game_id: gameId,
-        player_id: playerId  // Send our playerId
-    });
-});
+    　  document.getElementById('start-ai-game').addEventListener('click', () => {
+            const level = parseInt(document.getElementById('ai-level').value, 10);
+            const gameId = document.getElementById('room-id').value.trim();
+            
+            // Reset game state
+            yourColor = null;
+            currentGameId = null;
+            
+            socket.emit('start_ai_game', {
+                level: level,
+                game_id: gameId,
+                player_id: playerId  // Send our playerId
+            });
+        });
 
         
-        // Update the 'joined' handler
         socket.on('joined', (data) => {
             console.log("JOINED DATA:", data);
-            yourColor = data.your_color;  // Should be -1 for human in AI mode
-            currentGameId = data.game_id;
-            
-            const me = data.players.find(p => p.id === playerId);
-            const opp = data.players.find(p => p.id !== playerId);
-            
-            document.getElementById('status').textContent = 
-                `You (Black) vs Computer (White) | Turn: ${data.turn === -1 ? 'Black (Your move)' : 'White'}`;
-            
+            yourColor      = data.your_color;
+            currentGameId  = data.game_id;
+
             initBoard();
             updateBoard(data.board, data.turn);
-            
-            // Debug output
+
+            document.getElementById('status').textContent =
+                `You vs Opponent | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+
+            // デバッグ
             console.log("Your color:", yourColor, "Current turn:", data.turn);
-       
-        
-        // Include playerId in the emit
-        socket.emit('start_ai_game', {
-            level: level,
-            game_id: gameId,
-            player_id: playerId  // Make sure to send our playerId
         });
-    });
+
          
          
          
@@ -187,22 +202,22 @@
         // サーバーから新しく作成した部屋IDを受け取る
         // サーバーから部屋が作成されたときのイベント
         socket.on('room_created', data => {
-        console.log("Room created:", data.game_id);
-        document.getElementById('room-id').value = data.game_id;
-        currentGameId = data.game_id;  // ここでグローバル変数を更新
+            console.log("Room created:", data.game_id);
+            document.getElementById('room-id').value = data.game_id;
+            currentGameId = data.game_id;  // ここでグローバル変数を更新
         });
 
 
         socket.on('game_started', data => {
-        console.log("Game started event received:", data);
-        // もし data に game_id が含まれていれば、グローバル変数を更新
-        if (data.game_id) {
-            document.getElementById('room-id').value = data.game_id;
-            currentGameId = data.game_id;
-        }
-        updateBoard(data.board);  // 盤面描画関数を呼ぶ
-        document.getElementById('status').textContent =
-            `Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+            console.log("Game started event received:", data);
+            // もし data に game_id が含まれていれば、グローバル変数を更新
+            if (data.game_id) {
+                document.getElementById('room-id').value = data.game_id;
+                currentGameId = data.game_id;
+            }
+            updateBoard(data.board);  // 盤面描画関数を呼ぶ
+            document.getElementById('status').textContent =
+                `Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
         });
 
 
@@ -236,56 +251,117 @@
         });
 
         /// Update the 'joined' event handler
-    socket.on('joined', (data) => {
-    console.log("JOINED:", data);
-    yourColor = data.your_color;  // This should be -1 for human in AI mode
-    
-    const me = data.players.find(p => p.id === playerId);
-    const opp = data.players.find(p => p.id !== playerId);
-    
-    const meName = me ? me.name : 'You';
-    const oppName = opp ? opp.name : 'Waiting...';
-    const meColor = yourColor === -1 ? 'Black' : 'White';
-    
-    document.getElementById('status').textContent =
-        `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-    
-    initBoard();
-    updateBoard(data.board, data.turn);
-    
-    // Debug output
-    console.log("Your color:", yourColor, "Current turn:", data.turn);
-    console.log("Legal moves:", computeLegalMoves(data.board, yourColor));
+            socket.on('joined', (data) => {
+                console.log("JOINED:", data);
+                yourColor = data.your_color;  // This should be -1 for human in AI mode
+                
+                const me = data.players.find(p => p.id === playerId);
+                const opp = data.players.find(p => p.id !== playerId);
+                
+                const meName = me ? me.name : 'You';
+                const oppName = opp ? opp.name : 'Waiting...';
+                const meColor = yourColor === -1 ? 'Black' : 'White';
+                
+                document.getElementById('status').textContent =
+                    `${meName} (${meColor}) vs ${oppName} | Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+                
+                initBoard();
+                updateBoard(data.board, data.turn);
+                
+                // Debug output
+                console.log("Your color:", yourColor, "Current turn:", data.turn);
+                console.log("Legal moves:", computeLegalMoves(data.board, yourColor));
+            });
+
+            // Update the 'game_state' handler
+           
+
+           // AI考え中のイベントを処理
+    socket.on('ai_thinking', () => {
+        console.log("AI is thinking...");
+        // 必要ならここにAI考え中の表示を入れることも可能
     });
 
-    // Update the 'game_state' handler
-    socket.on('game_state', (data) => {
-    console.log("GAME_STATE:", data);
-    updateBoard(data.board, data.turn);
+    // game_stateイベントハンドラの修正
+    socket.on('game_state', data => {
+        console.log('💡 game_state:', data);
 
-    let statusText;
-    if (data.status === 'game_over') {
-        const w = data.score.white;
-        const b = data.score.black;
-        statusText = `Game Over — White: ${w}, Black: ${b}`;
-        document.querySelectorAll('.cell').forEach(c => c.classList.remove('legal-move'));
-    } else {
-        const turnText = data.turn === -1 ? 'Black' : 'White';
-        statusText = `Turn: ${turnText}`;
-        if (yourColor !== null && data.turn === yourColor) {
-            statusText += ' (Your move)';
+        const newBoard = data.board;
+        const turn = data.turn;
+        
+        // プレイヤーの手とAIの手を区別
+        const isPlayerMove = data.player_move === true;
+        const isAIMove = data.ai_move === true;
+
+        // 1. ひっくり返す石を特定
+        const flips = [];
+        if (lastBoard) {
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    const oldC = lastBoard[y][x];
+                    const newC = newBoard[y][x];
+                    if (oldC !== 0 && oldC !== newC) {
+                        flips.push({ y, x, to: newC });
+                    }
+                }
+            }
         }
-    }
-    document.getElementById('status').textContent = statusText;
 
-    // Update score display
-    const scoreEl = document.getElementById('score');
-    if (data.status === 'game_over') {
-        scoreEl.textContent = `Final Score — White: ${data.score.white}, Black: ${data.score.black}`;
-    } else {
-        scoreEl.textContent = '';
-    }
+        // 2. 最後に打った手をハイライト
+        if (data.last_move) {
+            highlightLastMove(data.last_move[0], data.last_move[1]);
+        }
+
+        // 3. 新しい盤面を描画
+        updateBoard(newBoard.map(row=>row.slice()), turn);
+
+        // 4. 各ひっくり返しをアニメーション
+        flips.forEach(({y, x, to}, i) => {
+            setTimeout(() => {
+                const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+                if (cell) {
+                    cell.innerHTML = `<div class="stone ${to===-1?'black':'white'}"></div>`;
+                }
+            }, i * 200);  // 200 ms between flips
+        });
+
+        // 次の処理までの遅延時間を計算
+        const animationDelay = flips.length * 200 + 100;
+
+        // 5. 全てのアニメーションが終わった後の処理
+        setTimeout(() => {
+            // a) ステータス行更新
+            if (data.status === 'game_over') {
+                document.getElementById('status').textContent = 
+                    `Game Over — W:${data.score.white} B:${data.score.black}`;
+            } else {
+                const turnText = turn === -1 ? 'Black' : 'White';
+                let txt = `Turn: ${turnText}`;
+                if (turn === yourColor) txt += ' (Your move)';
+                document.getElementById('status').textContent = txt;
+
+                // b) 合法手ハイライト
+                document.querySelectorAll('.cell.legal-move').forEach(c => c.classList.remove('legal-move'));
+                if (turn === yourColor) {
+                    computeLegalMoves(newBoard, yourColor).forEach(m => {
+                        const c = document.querySelector(`.cell[data-row="${m.y}"][data-col="${m.x}"]`);
+                        c.classList.add('legal-move');
+                        c.onclick = () => makeMove(m.y, m.x);
+                    });
+                }
+            }
+
+            // c) スコア更新
+            const scoreEl = document.getElementById('score');
+            scoreEl.textContent = data.status === 'game_over' 
+                ? `Final Score — W:${data.score.white} B:${data.score.black}` 
+                : '';
+
+            // d) 盤面保存
+            lastBoard = newBoard.map(r=>r.slice());
+        }, animationDelay);
     });
+
 
         // 初期描画
         initBoard();

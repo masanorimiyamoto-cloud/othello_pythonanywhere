@@ -1,4 +1,3 @@
-# othello_ai.py
 from othello import OthelloGame
 import math
 
@@ -12,13 +11,41 @@ class OthelloAI:
     def __init__(self, level=4):
         # レベルから深度を決定。存在しなければデフォルト4
         self.max_depth = self.LEVEL_DEPTH.get(level, 4)
-        
+        # 位置の価値テーブル
+        self.value_table = [
+            [100, -20, 10, 5, 5, 10, -20, 100],
+            [-20, -50, -2, -2, -2, -2, -50, -20],
+            [10, -2, 8, 0, 0, 8, -2, 10],
+            [5, -2, 0, 1, 1, 0, -2, 5],
+            [5, -2, 0, 1, 1, 0, -2, 5],
+            [10, -2, 8, 0, 0, 8, -2, 10],
+            [-20, -50, -2, -2, -2, -2, -50, -20],
+            [100, -20, 10, 5, 5, 10, -20, 100]
+        ]
 
     def evaluate(self, board):
-        # 単純に石の差を評価
-        white = sum(cell == 1 for row in board for cell in row)
-        black = sum(cell == -1 for row in board for cell in row)
-        return white - black
+        # 石数カウント
+        stones_count = sum(1 for row in board for cell in row if cell != 0)
+        white_count = sum(1 for row in board for cell in row if cell == 1)
+        black_count = sum(1 for row in board for cell in row if cell == -1)
+        stone_diff = white_count - black_count
+        
+        # 位置評価値
+        position_score = 0
+        for r in range(8):
+            for c in range(8):
+                if board[r][c] == 1:  # 白
+                    position_score += self.value_table[r][c]
+                elif board[r][c] == -1:  # 黒
+                    position_score -= self.value_table[r][c]
+        
+        # ゲーム進行度による評価バランス調整
+        if stones_count < 20:  # 序盤
+            return position_score * 3 + stone_diff
+        elif stones_count < 50:  # 中盤
+            return position_score * 2 + stone_diff * 2
+        else:  # 終盤
+            return position_score + stone_diff * 5
 
     def minimax(self, game: OthelloGame, depth, alpha, beta, maximizing_player):
         if depth == 0 or not game.has_valid_move(game.turn):
