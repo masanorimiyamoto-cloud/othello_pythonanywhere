@@ -185,6 +185,9 @@ def handle_move(data):
             ai_result = game_data["game"].make_move(r, c)
             
             # AIの手の結果を送信
+            import time
+            time.sleep(0.8)  # 秒数で指定
+
             ai_move_payload = {
                 "board": game_data["game"].board,
                 "turn": game_data["game"].turn,
