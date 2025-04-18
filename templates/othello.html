@@ -18,14 +18,17 @@
     #status { font-size: 1.2em; margin: 10px 0; }
     #game-controls { margin: 20px 0; }
     input, button { padding: 8px; margin-right: 10px; }
-    /* 最後に置かれたセルをひときわ光らせる */
-    .cell.last-move {
-    animation: flash 1s ease-out;
+   
+    /* AI（または人間）が置いた石を強調 */
+    .cell.placed-move {
+        box-shadow: 0 0 0 4px rgba(255,0,0,0.8);
+        animation: pulse 1.8ms ease-out;
     }
-    @keyframes flash {
-    0%   { box-shadow: 0 0 0 4px rgba(255,255,0,0.8); }
-    100% { box-shadow: 0 0 0   rgba(255,255,0,0); }
+    @keyframes pulse {
+        0%   { box-shadow: 0 0 0 4px rgba(255,0,0,0.8); }
+        100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
     }
+
 
 </style>
 </head>
@@ -307,6 +310,19 @@ socket.on('game_state', data => {
   // 2. 最後に打った手をハイライト
   if (data.last_move) {
     highlightLastMove(data.last_move[0], data.last_move[1]);
+    // 2) “置かれた” 石を赤く強調する
+  
+    const [pr, pc] = data.last_move;
+    const placedCell = document.querySelector(
+      `.cell[data-row="${pr}"][data-col="${pc}"]`
+    );
+    if (placedCell) {
+      placedCell.classList.add('placed-move');
+      // 800ms で強調を消す
+      setTimeout(() => {
+        placedCell.classList.remove('placed-move');
+      }, 800);
+    }
   }
 
   // 3. 新しい盤面を描画
