@@ -28,6 +28,24 @@
         0%   { box-shadow: 0 0 0 4px rgba(255,0,0,0.8); }
         100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
     }
+    /* 石を回転させるコンテナ */
+    .cell {
+    perspective: 600px;
+    }
+
+    /* 回転アニメーションの定義 */
+    @keyframes flipStone {
+    0%   { transform: rotateY(0deg); }
+    50%  { transform: rotateY(90deg); }
+    100% { transform: rotateY(0deg); }
+    }
+
+    /* 回転中の石 */
+    .stone.flipping {
+    animation: flipStone 0.6s ease-in-out forwards;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    }
 
 
 </style>
@@ -162,7 +180,8 @@
             row, col
         });
     }
-    
+        
+
 
     // イベントリスナー
     
@@ -328,15 +347,27 @@ socket.on('game_state', data => {
   // 3. 新しい盤面を描画
   updateBoard(newBoard.map(r => r.slice()), turn);
 
-  // 4. 各ひっくり返しをアニメーション
+  // 4. 各ひっくり返しを 3D で回転アニメーション
   flips.forEach(({y, x, to}, i) => {
-    setTimeout(() => {
-      const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-      if (cell) {
-        cell.innerHTML = `<div class="stone ${to===-1?'black':'white'}"></div>`;
-      }
-    }, i * 200);
-  });
+      setTimeout(() => {
+        const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+        if (!cell) return;
+        // ① 既存の石要素を取得
+        const stone = cell.querySelector('.stone');
+        if (!stone) return;
+        // ② flipping クラスで 3D 回転開始
+        stone.classList.add('flipping');
+        // ③ 回転の中間で色を切り替え
+        setTimeout(() => {
+          stone.classList.remove('black', 'white');
+          stone.classList.add(to===-1 ? 'black' : 'white');
+        }, 300); // flipStone アニメの半分 (0.6s の半分)
+        // ④ アニメ完了後にクラスを外す
+        setTimeout(() => {
+          stone.classList.remove('flipping');
+        }, 600);
+      }, i * 200);  // 石ごとに 200ms 間隔でスタート
+    });
 
   const animationDelay = flips.length * 200 + 100;
 
