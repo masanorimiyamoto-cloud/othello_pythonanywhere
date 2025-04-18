@@ -40,7 +40,7 @@ class OthelloGame:
                 if self.board[r][c] == 0 and self.stones_to_flip(r, c, turn):
                     return True
         return False
-
+    
     def make_move(self, row: int, col: int) -> dict:
         """
         手を打って盤面を更新する。
@@ -75,3 +75,11 @@ class OthelloGame:
 
         self.turn = next_turn
         return {"status": "success", "board": self.board, "turn": self.turn, "passed": passed}
+    def valid_moves(self, turn: int) -> List[Tuple[int,int]]:
+            """指定色 turn の合法手を (row, col) のリストで返す."""
+            moves: List[Tuple[int,int]] = []
+            for r in range(8):
+                for c in range(8):
+                    if self.board[r][c] == 0 and self.stones_to_flip(r, c, turn):
+                        moves.append((r, c))
+            return moves
