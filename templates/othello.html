@@ -30,50 +30,29 @@
       100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
     }
 
-    /* 石本体を 3D 化 */
-    .stone {
-    width: 40px;
-    height: 40px;
-    position: relative;
-    transform-style: preserve-3d;
-    perspective: 600px;
-    }
+    /* 石を 3D 回転させる基礎スタイル */
+.stone {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
 
-    /* 前面・背面を ::before と ::after で描画 */
-    .stone::before,
-    .stone::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    border-radius: 50%;
-    border: 1px solid #333;
-    backface-visibility: hidden;
-    }
+/* 黒→白 のとき */
+@keyframes flipBlackToWhite {
+  0%, 49%   { transform: rotateY(0deg);   background-color: #222; }
+  50%       { transform: rotateY(90deg);  background-color: #fff; }
+  100%      { transform: rotateY(180deg); background-color: #fff; }
+}
 
-    /* 前面（常に旧色）*/
-    .stone.black::before { background-color: #222; }
-    .stone.white::before { background-color: #fff; }
+/* 白→黒 のとき */
+@keyframes flipWhiteToBlack {
+  0%, 49%   { transform: rotateY(0deg);   background-color: #fff; }
+  50%       { transform: rotateY(90deg);  background-color: #222; }
+  100%      { transform: rotateY(180deg); background-color: #222; }
+}
 
-    /* 背面（180°回転させて新色）*/
-    .stone.black::after {
-    background-color: #fff;
-    transform: rotateY(180deg);
-    }
-    .stone.white::after {
-    background-color: #222;
-    transform: rotateY(180deg);
-    }
-
-    /* 回転アニメーション */
-    @keyframes flipStone {
-    from { transform: rotateY(0deg); }
-    to   { transform: rotateY(180deg); }
-    }
-
-    .stone.flipping {
-    animation: flipStone 0.6s ease-in-out forwards;
-    }
 
   </style>
 </head>
@@ -290,7 +269,7 @@
   const newBoard = data.board;
   const turn     = data.turn;
 
-  // 1) フリップ対象のリストを作成（旧盤面 lastBoard → newBoard の差分）
+  // 1) 前回盤面との比較で“ひっくり返すべき石”を抽出
   const flips = [];
   if (lastBoard) {
     for (let y = 0; y < 8; y++) {
@@ -298,38 +277,58 @@
         const oldVal = lastBoard[y][x];
         const newVal = newBoard[y][x];
         if (oldVal !== 0 && oldVal !== newVal) {
-          flips.push({ y, x, to: newVal });
+          flips.push({ y, x, from: oldVal, to: newVal });
         }
       }
     }
   }
 
-  // 2) 置かれた手だけは即座に描画
+  // 2) “置かれた手”はすぐ描画して強調
   if (Array.isArray(data.last_move)) {
     const [r, c] = data.last_move;
     const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
     if (cell) {
-      // 新しい石を追加
       const v = newBoard[r][c];
       const stone = document.createElement('div');
       stone.className = `stone ${v === -1 ? 'black' : 'white'}`;
       cell.appendChild(stone);
-      // 強調アニメ（任意）
+      // 強調アニメ
       stone.classList.add('placed-move');
       setTimeout(() => stone.classList.remove('placed-move'), 800);
     }
   }
 
-  // 3) 旧色の石をひっくり返すアニメーション
-  const delay = animateFlips(newBoard, flips);
+  // 3) 各石を順番に回転させる
+  const perDelay  = 100;  // 石ごとのディレイ
+  const animTime  = 600;  // 上の CSS keyframes の duration
+  flips.forEach(({ y, x, from, to }, i) => {
+    setTimeout(() => {
+      const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+      const stone = cell.querySelector('.stone');
+      if (!stone) return;
+      // アニメ名を決定
+      const animName = (from === -1 && to === 1)
+                         ? 'flipBlackToWhite'
+                         : (from === 1 && to === -1)
+                           ? 'flipWhiteToBlack'
+                           : null;
+      if (!animName) return;
+      // アニメーションを発火
+      stone.style.animation = `${animName} ${animTime}ms ease-in-out forwards`;
+    }, i * perDelay);
+  });
 
   // 4) アニメ終了後に全体再描画＆状態更新
+  const totalDelay = flips.length
+    ? (flips.length - 1) * perDelay + animTime
+    : 0;
   setTimeout(() => {
-    updateBoard(newBoard.map(row => row.slice()), turn);
+    updateBoard(newBoard.map(r => r.slice()), turn);
     updateStatusAndHighlight(data, turn);
-    lastBoard = newBoard.map(row => row.slice());
-  }, delay);
+    lastBoard = newBoard.map(r => r.slice());
+  }, totalDelay);
 });
+
 
 
 
