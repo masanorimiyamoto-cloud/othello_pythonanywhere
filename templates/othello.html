@@ -176,7 +176,7 @@
         setTimeout(()=>stone.classList.remove('flipping'), 600);
       }, i*300);
     });
-    return flips.length*300 + 100; // 総アニメ時間 + バッファ
+    return flips.length*200 + 100; // 総アニメ時間 + バッファ
   }
 
   function updateStatusAndHighlight(data, turn) {
@@ -206,7 +206,11 @@
   //─────────────────────────────────────────
   // 3. Socket.IO イベントハンドラ
   //─────────────────────────────────────────
-
+  socket.on('connect', () => {      
+    playerId = socket.id;           // ← 接続時にIDをセット
+    console.log('My playerId:', playerId);
+ });
+ 
   socket.on('room_created', data => {
     currentGameId = data.game_id;
     document.getElementById('room-id').value = data.game_id;
