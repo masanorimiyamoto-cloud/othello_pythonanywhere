@@ -281,17 +281,17 @@
       const level  = +document.getElementById('ai-level').value;
       const gameId = document.getElementById('room-id').value.trim();
       yourColor = null;
-      socket.emit('start_ai_game', { level, game_id:gameId, playerId:playerId });
+      socket.emit('start_ai_game', { level, game_id:gameId, player_id:playerId });
     });
 
   document.getElementById('create-room')
     .addEventListener('click', () => {
       fetch('/create_room').then(r=>r.json()).then(d=>{
         socket.emit('join_game',{
-          game_id: d.game_id,
-          playerId,
-          name: 'Player-'+playerId.slice(-4)
-        });
+        game_id:   d.game_id,
+        player_id: playerId,
+         name:      'Player-'+playerId.slice(-4)
+       });
       });
     });
 
@@ -299,7 +299,7 @@
     .addEventListener('click', () => {
       const rid = document.getElementById('room-id').value.trim();
       if (!rid) return alert('Please enter a Room ID');
-      socket.emit('join_game',{ game_id:rid, playerId, name:'Player-'+playerId.slice(-4) });
+      socket.emit('join_game',{ game_id:rid, player_id: playerId, name:'Player-'+playerId.slice(-4) });
     });
 
   //─────────────────────────────────────────
