@@ -20,7 +20,7 @@ socketio = SocketIO(app)
 game_manager = GameManager()
 AI_PLAYER_ID = "AI"
 # Human move delay parameters
-BASE_DELAY    = 0.5   # seconds
+BASE_DELAY    = 1.5   # seconds
 PER_FLIP_SEC  = 0.1   # additional seconds per flipped stone
 
 # -----------------------------------------------------------------------------
