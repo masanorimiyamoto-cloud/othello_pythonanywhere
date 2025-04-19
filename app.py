@@ -30,17 +30,22 @@ PER_FLIP_SEC  = 0.1   # additional seconds per flipped stone
 def index():
     return render_template("othello.html")
 
-@app.route("/create_room")
-def create_room():
-    game_id = game_manager.create_game()
-    return {"game_id": game_id}
-
 # -----------------------------------------------------------------------------
 # Socket.IO Events: Connection
 # -----------------------------------------------------------------------------
 @socketio.on("connect")
 def handle_connect():
     emit("connection_established", {"message": "Connected"})
+
+# -----------------------------------------------------------------------------
+# Socket.IO Events: Room Management
+# -----------------------------------------------------------------------------
+@socketio.on("create_room")
+def handle_create_room(data):
+    """Socket.IOでルーム作成を処理"""
+    game_id = game_manager.create_game()
+    join_room(game_id)
+    emit("room_created", {"game_id": game_id}, room=request.sid)
 
 # -----------------------------------------------------------------------------
 # Socket.IO Events: AI Game Start
@@ -53,12 +58,12 @@ def on_start_ai(data):
 
     if not game_id:
         game_id = game_manager.create_game()
-        emit("room_created", {"game_id": game_id})
+        emit("room_created", {"game_id": game_id}, room=request.sid)
 
     join_room(game_id)
     game_data = game_manager.get_game(game_id)
     if not game_data:
-        emit("error", {"message": "Game not found"})
+        emit("error", {"message": "Game not found"}, room=request.sid)
         return
 
     # Reset players
@@ -78,13 +83,13 @@ def on_start_ai(data):
         "your_color": -1,
         "board": game_data["game"].board,
         "turn": game_data["game"].turn
-    }, room=game_id)
+    }, room=request.sid)
 
     emit("game_state", {
         "board": game_data["game"].board,
         "turn": game_data["game"].turn,
         "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
-        "your_color": -1
+        "status": "ongoing"
     }, room=game_id)
 
 # -----------------------------------------------------------------------------
@@ -98,31 +103,47 @@ def handle_join_game(data):
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
-        emit("error", {"message": "Game not found"})
+        emit("error", {"message": "Game not found"}, room=request.sid)
         return
 
-    if not game_manager.add_player(game_id, player_id, name):
-        emit("error", {"message": "Game is full"})
-        return
+    # 既に参加しているプレイヤーかチェック
+    existing_player = next((p for p in game_data["players"] if p.id == player_id), None)
+    if existing_player:
+        color = -1 if game_data["players"][0].id == player_id else 1
+    else:
+        if not game_manager.add_player(game_id, player_id, name):
+            emit("error", {"message": "Game is full"}, room=request.sid)
+            return
+        color = -1 if len(game_data["players"]) == 1 else 1
 
     join_room(game_id)
     players = game_data["players"]
-    idx = next(i for i, p in enumerate(players) if p.id == player_id)
-    color = -1 if idx == 0 else 1
 
-    # 👇 ここが重要：このクライアントだけに送る
+    # 参加者にのみ送信
     emit("joined", {
-        "players":    [{"id": p.id, "name": p.name} for p in players],
+        "game_id": game_id,
+        "players": [{"id": p.id, "name": p.name} for p in players],
         "your_color": color,
-        "board":      game_data["game"].board,
-        "turn":       game_data["game"].turn
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn
     }, room=request.sid)
 
+    # 全員にゲーム状態をブロードキャスト
     emit("game_state", {
-        "board":   game_data["game"].board,
-        "turn":    game_data["game"].turn,
-        "players": [{"id": p.id, "name": p.name} for p in players]
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
+        "players": [{"id": p.id, "name": p.name} for p in players],
+        "status": "ongoing"
     }, room=game_id)
+
+    # 2人揃ったらゲーム開始
+    if len(players) == 2 and not game_data.get("ai"):
+        emit("game_started", {
+            "game_id": game_id,
+            "board": game_data["game"].board,
+            "turn": -1,  # 黒から開始
+            "players": [{"id": p.id, "name": p.name} for p in players]
+        }, room=game_id)
 
 # -----------------------------------------------------------------------------
 # Socket.IO Events: Move Handling
@@ -135,75 +156,64 @@ def handle_move(data):
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
-        emit("error", {"message": "Game not found"})
+        emit("error", {"message": "Game not found"}, room=request.sid)
         return
 
+    # プレイヤー確認
     try:
         player_index = next(i for i, p in enumerate(game_data["players"]) if p.id == player_id)
     except StopIteration:
-        emit("error", {"message": "Player not in game"})
+        emit("error", {"message": "Player not in game"}, room=request.sid)
         return
 
-    expected_turn = -1 if player_index == 0 else 1
-    if game_data["game"].turn != expected_turn:
-        emit("error", {"message": f"Not your turn (Expected:{expected_turn}, Actual:{game_data['game'].turn})"})
+    # ターン確認
+    expected_color = -1 if player_index == 0 else 1
+    if game_data["game"].turn != expected_color:
+        emit("error", {"message": "Not your turn"}, room=request.sid)
         return
 
-    # 1) Black (Human) flips count
-    flips = game_data["game"].stones_to_flip(row, col, game_data["game"].turn)
-    num_flips = len(flips)
-
-    # 2) Apply human move
+    # 移動実行
     result = game_data["game"].make_move(row, col)
     if result["status"] in ("cell occupied", "invalid move"):
-        emit("error", {"message": result.get("message", "Invalid move")})
+        emit("error", {"message": result.get("message", "Invalid move")}, room=request.sid)
         return
 
-    # 3) Send human move state
-    human_move_payload = {
+    # ゲーム状態更新
+    payload = {
         "board": game_data["game"].board,
         "turn": game_data["game"].turn,
         "last_move": [row, col],
-        "status": "ongoing",
-        "player_move": True
+        "status": result["status"],
+        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
     }
     if result["status"] == "game_over":
-        human_move_payload.update({
-            "status": "game_over",
-            "score": {
-                "white": int(result["score"]["white"]),
-                "black": int(result["score"]["black"])
-            }
-        })
-    emit("game_state", human_move_payload, room=game_id)
+        payload["score"] = {
+            "white": int(result["score"]["white"]),
+            "black": int(result["score"]["black"])
+        }
 
-    # 4) Delay before AI move based on flips
-    delay = BASE_DELAY + PER_FLIP_SEC * num_flips
-    time.sleep(delay)
+    emit("game_state", payload, room=game_id)
 
-    # 5) AI move
-    ai = game_data.get("ai")
-    if ai and human_move_payload["status"] == "ongoing" and game_data["game"].turn == 1 and game_data["game"].has_valid_move(1):
+    # AI対戦の場合の処理
+    if "ai" in game_data and result["status"] == "ongoing" and game_data["game"].turn == 1:
+        time.sleep(BASE_DELAY)  # AIの思考時間
         emit("ai_thinking", {}, room=game_id)
-        r, c = ai.choose_move(game_data["game"])
+        r, c = game_data["ai"].choose_move(game_data["game"])
         ai_result = game_data["game"].make_move(r, c)
-
-        ai_move_payload = {
+        
+        ai_payload = {
             "board": game_data["game"].board,
             "turn": game_data["game"].turn,
             "last_move": [r, c],
-            "status": "ongoing",
-            "ai_move": True
+            "status": ai_result["status"],
+            "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
         }
         if ai_result["status"] == "game_over":
-            ai_move_payload.update({
-                "status": "game_over",
-                "score": {
-                    "white": int(ai_result["score"]["white"]),
-                    "black": int(ai_result["score"]["black"])
-                }
-            })
-        emit("game_state", ai_move_payload, room=game_id)
+            ai_payload["score"] = {
+                "white": int(ai_result["score"]["white"]),
+                "black": int(ai_result["score"]["black"])
+            }
+        emit("game_state", ai_payload, room=game_id)
 
 # -----------------------------------------------------------------------------
 # Main Entry

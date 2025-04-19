@@ -152,6 +152,7 @@
 
   function makeMove(r,c) {
     if (!currentGameId) { alert('Please join a game first!'); return; }
+    if (yourColor === null) { alert('Please wait for the game to start!'); return; }
     socket.emit('make_move', {
       game_id: currentGameId,
       player_id: playerId,
@@ -209,33 +210,34 @@
   socket.on('connect', () => {      
     playerId = socket.id;           // ← 接続時にIDをセット
     console.log('My playerId:', playerId);
- });
+  });
 
   socket.on('room_created', data => {
     currentGameId = data.game_id;
     document.getElementById('room-id').value = data.game_id;
+    document.getElementById('status').textContent = `Room created: ${data.game_id}. Waiting for opponent...`;
   });
 
   socket.on('joined', data => {
-    yourColor     = data.your_color;
+    yourColor = data.your_color;
     currentGameId = data.game_id;
     initBoard();
-    updateBoard(data.board,data.turn);
-    document.getElementById('status').textContent =
-      `Turn: ${data.turn===-1?'Black':'White'}`;
-    lastBoard = data.board.map(r=>r.slice());
+    updateBoard(data.board, data.turn);
+    document.getElementById('status').textContent = 
+      `Joined as ${yourColor === -1 ? 'Black' : 'White'}. Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+    lastBoard = data.board.map(r => r.slice());
   });
 
   socket.on('game_started', data => {
     currentGameId = data.game_id || currentGameId;
     initBoard();
-    updateBoard(data.board,data.turn);
+    updateBoard(data.board, data.turn);
     document.getElementById('status').textContent =
-      `Turn: ${data.turn===-1?'Black':'White'}`;
-    lastBoard = data.board.map(r=>r.slice());
+      `Game started. Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
+    lastBoard = data.board.map(r => r.slice());
   });
 
-  socket.on('ai_thinking', ()=> {
+  socket.on('ai_thinking', () => {
     document.getElementById('status').textContent = 'AI is thinking…';
   });
 
@@ -244,76 +246,63 @@
     // 1) ひっくり返しリスト作成
     const flips = [];
     if (lastBoard) {
-      for (let y=0; y<8; y++){
-        for (let x=0; x<8; x++){
-          const o=lastBoard[y][x], n=newBoard[y][x];
-          if (o!==0 && o!==n) flips.push({y,x,to:n});
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const o = lastBoard[y][x], n = newBoard[y][x];
+          if (o !== 0 && o !== n) flips.push({y, x, to: n});
         }
       }
     }
     // 2) 置かれた手を強調
     if (data.last_move) {
-      const [r,c]=data.last_move;
-      highlightLastMove(r,c);
+      const [r, c] = data.last_move;
+      highlightLastMove(r, c);
       const placed = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
       if (placed) {
         placed.classList.add('placed-move');
-        setTimeout(()=>placed.classList.remove('placed-move'),800);
+        setTimeout(() => placed.classList.remove('placed-move'), 800);
       }
     }
     // 3) 直ちに再描画
-    updateBoard(newBoard.map(r=>r.slice()), turn);
+    updateBoard(newBoard.map(r => r.slice()), turn);
     // 4) ひっくり返しアニメ
     const delay = animateFlips(newBoard, flips);
     // 5) アニメ後にステータス更新・合法手
-    setTimeout(()=> {
+    setTimeout(() => {
       updateStatusAndHighlight(data, turn);
-      lastBoard = newBoard.map(r=>r.slice());
+      lastBoard = newBoard.map(r => r.slice());
     }, delay);
+  });
+
+  socket.on('error', (message) => {
+    alert(message);
   });
 
   //─────────────────────────────────────────
   // 4. UI ボタンイベント
   //─────────────────────────────────────────
-
   document.getElementById('start-ai-game')
     .addEventListener('click', () => {
       const level  = +document.getElementById('ai-level').value;
       const gameId = document.getElementById('room-id').value.trim();
-      yourColor = null;
-      socket.emit('start_ai_game', { level, game_id:gameId, player_id:playerId });
+      yourColor = -1; // プレイヤーは常に先手(黒)
+      socket.emit('start_ai_game', { level, game_id: gameId, player_id: playerId });
     });
 
-    
-
-   document.getElementById('create-room')
+  document.getElementById('create-room')
     .addEventListener('click', () => {
-      fetch('/create_room')
-        .then(res => res.json())
-        .then(data => {
-          const gid = data.game_id;
-          // ① 取得したIDをグローバル変数に保持
-          currentGameId = gid;
-          // ② 入力欄に表示
-          document.getElementById('room-id').value = gid;
-          // ③ ステータスにも表示（任意）
-          document.getElementById('status').textContent = `Created Room: ${gid}`;
-
-         
-        })
-        .catch(err => {
-          console.error('Failed to create room:', err);
-          document.getElementById('status').textContent = 'Error creating room';
-         });
+      socket.emit('create_room', { player_id: playerId });
     });
-
-
 
   document.getElementById('join-room')
     .addEventListener('click', () => {
       const rid = document.getElementById('room-id').value.trim();
       if (!rid) return alert('Please enter a Room ID');
-      socket.emit('join_game',{ game_id:rid, player_id: playerId, name:'Player-'+playerId.slice(-4) });
+      socket.emit('join_game', { 
+        game_id: rid, 
+        player_id: playerId, 
+        name: 'Player-' + playerId.slice(-4) 
+      });
     });
 
   //─────────────────────────────────────────
