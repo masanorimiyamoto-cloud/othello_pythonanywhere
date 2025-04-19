@@ -173,29 +173,31 @@
     });
   }
 
-    function animateFlips(newBoard, flips) {
-    const DURATION = 600; // CSS と合わせる
+  function animateFlips(flips) {
+  const perDelay = 200;  // 石ごとの開始ディレイ (お好みで調整)
+  const duration = 600;  // CSS の flipStone アニメと合わせる
 
-    flips.forEach(({y, x}, i) => {
-        setTimeout(() => {
-        const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-        const stone = cell.querySelector('.stone');
-        if (!stone) return;
+  flips.forEach(({ y, x }, i) => {
+    setTimeout(() => {
+      // 対象の .stone 要素を取得
+      const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+      const stone = cell?.querySelector('.stone');
+      if (!stone) return;
 
-        // 1) アニメ開始
-        stone.classList.add('flipping');
+      // 回転アニメ開始
+      stone.classList.add('flipping');
 
-        // 2) アニメ完了後に class を外す
-        setTimeout(() => {
-            stone.classList.remove('flipping');
-            // さらに板を回転後の向きにリセット（必要に応じて）
-            stone.style.transform = 'rotateY(0deg)';
-        }, DURATION);
-        }, i * 200); // 石ごとのタイミングはお好みで
-    });
+      // アニメ完了後に .flipping を外し、transform をリセット
+      setTimeout(() => {
+        stone.classList.remove('flipping');
+        stone.style.transform = 'rotateY(0deg)';
+      }, duration);
+    }, i * perDelay);
+  });
 
-    return flips.length * 200 + DURATION;
-    }
+  // 全体のアニメ終了時間
+  return flips.length * perDelay + duration;
+}
 
 
 
@@ -269,7 +271,7 @@
   const newBoard = data.board;
   const turn     = data.turn;
 
-  // 1) 前回盤面との比較で“ひっくり返すべき石”を抽出
+  // (A) 前回盤面から“ひっくり返すべき石”を抽出
   const flips = [];
   if (lastBoard) {
     for (let y = 0; y < 8; y++) {
@@ -277,56 +279,35 @@
         const oldVal = lastBoard[y][x];
         const newVal = newBoard[y][x];
         if (oldVal !== 0 && oldVal !== newVal) {
-          flips.push({ y, x, from: oldVal, to: newVal });
+          flips.push({ y, x });
         }
       }
     }
   }
 
-  // 2) “置かれた手”はすぐ描画して強調
+  // (B) “置かれた一手”だけは即座に描画して強調
   if (Array.isArray(data.last_move)) {
     const [r, c] = data.last_move;
-    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    const cell   = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
     if (cell) {
-      const v = newBoard[r][c];
+      const v     = newBoard[r][c];
       const stone = document.createElement('div');
       stone.className = `stone ${v === -1 ? 'black' : 'white'}`;
       cell.appendChild(stone);
-      // 強調アニメ
       stone.classList.add('placed-move');
       setTimeout(() => stone.classList.remove('placed-move'), 800);
     }
   }
 
-  // 3) 各石を順番に回転させる
-  const perDelay  = 100;  // 石ごとのディレイ
-  const animTime  = 600;  // 上の CSS keyframes の duration
-  flips.forEach(({ y, x, from, to }, i) => {
-    setTimeout(() => {
-      const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-      const stone = cell.querySelector('.stone');
-      if (!stone) return;
-      // アニメ名を決定
-      const animName = (from === -1 && to === 1)
-                         ? 'flipBlackToWhite'
-                         : (from === 1 && to === -1)
-                           ? 'flipWhiteToBlack'
-                           : null;
-      if (!animName) return;
-      // アニメーションを発火
-      stone.style.animation = `${animName} ${animTime}ms ease-in-out forwards`;
-    }, i * perDelay);
-  });
+  // (C) 旧色の石を回転させるアニメ
+  const delay = animateFlips(flips);
 
-  // 4) アニメ終了後に全体再描画＆状態更新
-  const totalDelay = flips.length
-    ? (flips.length - 1) * perDelay + animTime
-    : 0;
+  // (D) アニメ終了後に全体を newBoard で再描画＆状態更新
   setTimeout(() => {
     updateBoard(newBoard.map(r => r.slice()), turn);
     updateStatusAndHighlight(data, turn);
     lastBoard = newBoard.map(r => r.slice());
-  }, totalDelay);
+  }, delay);
 });
 
 
