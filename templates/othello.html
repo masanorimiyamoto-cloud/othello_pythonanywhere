@@ -30,19 +30,51 @@
       100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
     }
 
-    /* ひっくり返しアニメを 0→90→180° に */
-    @keyframes flipStone {
-    0%   { transform: rotateY(0deg); }
-    50%  { transform: rotateY(90deg); }
-    100% { transform: rotateY(180deg); }
+    /* 石本体を 3D 化 */
+    .stone {
+    width: 40px;
+    height: 40px;
+    position: relative;
+    transform-style: preserve-3d;
+    perspective: 600px;
     }
 
+    /* 前面・背面を ::before と ::after で描画 */
+    .stone::before,
+    .stone::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    border: 1px solid #333;
+    backface-visibility: hidden;
+    }
+
+    /* 前面（常に旧色）*/
+    .stone.black::before { background-color: #222; }
+    .stone.white::before { background-color: #fff; }
+
+    /* 背面（180°回転させて新色）*/
+    .stone.black::after {
+    background-color: #fff;
+    transform: rotateY(180deg);
+    }
+    .stone.white::after {
+    background-color: #222;
+    transform: rotateY(180deg);
+    }
+
+    /* 回転アニメーション */
+    @keyframes flipStone {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(180deg); }
+    }
 
     .stone.flipping {
-      animation: flipStone 0.6s ease-in-out forwards;
-      backface-visibility: hidden;
-      transform-style: preserve-3d;
+    animation: flipStone 0.6s ease-in-out forwards;
     }
+
   </style>
 </head>
 <body>
@@ -163,37 +195,29 @@
   }
 
     function animateFlips(newBoard, flips) {
-    const DURATION = 600;      // ミリ秒
-    const HALF     = DURATION / 2;  // 300ms
+    const DURATION = 600; // CSS と合わせる
 
-    flips.forEach(({y, x, to}, i) => {
+    flips.forEach(({y, x}, i) => {
         setTimeout(() => {
         const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
         const stone = cell.querySelector('.stone');
         if (!stone) return;
 
-        // いま付いている色クラスを覚えておく
-        const oldClass = stone.classList.contains('black') ? 'black' : 'white';
-        const newClass = to === -1 ? 'black' : 'white';
-
-        // 1) アニメ開始用クラスを付与 → 0→90→180° へ回転
+        // 1) アニメ開始
         stone.classList.add('flipping');
 
-        // 2) 半分（90°）経ったタイミングで色を切り替え
-        setTimeout(() => {
-            stone.classList.replace(oldClass, newClass);
-        }, HALF);
-
-        // 3) アニメ完了後に flipping クラスを外して transform 状態をリセット
+        // 2) アニメ完了後に class を外す
         setTimeout(() => {
             stone.classList.remove('flipping');
+            // さらに板を回転後の向きにリセット（必要に応じて）
+            stone.style.transform = 'rotateY(0deg)';
         }, DURATION);
-        }, i * 300);
+        }, i * 200); // 石ごとのタイミングはお好みで
     });
 
-    // 全体のアニメが終わるまでの時間を返す
-    return flips.length * 300 + DURATION;
+    return flips.length * 200 + DURATION;
     }
+
 
 
   function updateStatusAndHighlight(data, turn) {
