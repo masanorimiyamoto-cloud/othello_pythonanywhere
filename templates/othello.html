@@ -30,12 +30,14 @@
       100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
     }
 
-    /* --- ひっくり返しアニメ --- */
+    /* ひっくり返しアニメを 0→90→180° に */
     @keyframes flipStone {
-      0%   { transform: rotateY(0deg); }
-      50%  { transform: rotateY(90deg); }
-      100% { transform: rotateY(0deg); }
+    0%   { transform: rotateY(0deg); }
+    50%  { transform: rotateY(90deg); }
+    100% { transform: rotateY(180deg); }
     }
+
+
     .stone.flipping {
       animation: flipStone 0.6s ease-in-out forwards;
       backface-visibility: hidden;
@@ -160,25 +162,39 @@
     });
   }
 
-  function animateFlips(newBoard, flips) {
-    // flips: [{y,x,to}]
-    flips.forEach(({y,x,to}, i) => {
-      setTimeout(()=>{
-        const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+    function animateFlips(newBoard, flips) {
+    const DURATION = 600;      // ミリ秒
+    const HALF     = DURATION / 2;  // 300ms
+
+    flips.forEach(({y, x, to}, i) => {
+        setTimeout(() => {
+        const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
         const stone = cell.querySelector('.stone');
         if (!stone) return;
+
+        // いま付いている色クラスを覚えておく
+        const oldClass = stone.classList.contains('black') ? 'black' : 'white';
+        const newClass = to === -1 ? 'black' : 'white';
+
+        // 1) アニメ開始用クラスを付与 → 0→90→180° へ回転
         stone.classList.add('flipping');
-        // 半回転後に色を変える
-        setTimeout(()=>{
-          stone.classList.remove('black','white');
-          stone.classList.add(to===-1?'black':'white');
-        }, 300);
-        // アニメ完了
-        setTimeout(()=>stone.classList.remove('flipping'), 600);
-      }, i*300);
+
+        // 2) 半分（90°）経ったタイミングで色を切り替え
+        setTimeout(() => {
+            stone.classList.replace(oldClass, newClass);
+        }, HALF);
+
+        // 3) アニメ完了後に flipping クラスを外して transform 状態をリセット
+        setTimeout(() => {
+            stone.classList.remove('flipping');
+        }, DURATION);
+        }, i * 300);
     });
-    return flips.length*200 + 100; // 総アニメ時間 + バッファ
-  }
+
+    // 全体のアニメが終わるまでの時間を返す
+    return flips.length * 300 + DURATION;
+    }
+
 
   function updateStatusAndHighlight(data, turn) {
     // Turn 表示
