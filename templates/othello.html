@@ -287,38 +287,47 @@
   });
 
   socket.on('game_state', data => {
-    console.log('Game state update:', data);
-    const newBoard = data.board, turn = data.turn;
-    // 1) ひっくり返しリスト作成
-    const flips = [];
-    if (lastBoard) {
-      for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-          const o = lastBoard[y][x], n = newBoard[y][x];
-          if (o !== 0 && o !== n) flips.push({y, x, to: n});
+  const newBoard = data.board;
+  const turn     = data.turn;
+
+  // 1) ひっくり返しリスト作成
+  const flips = [];
+  if (lastBoard) {
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const oldVal = lastBoard[y][x];
+        const newVal = newBoard[y][x];
+        if (oldVal !== 0 && oldVal !== newVal) {
+          flips.push({ y, x, to: newVal });
         }
       }
     }
-    // 2) 置かれた手を強調
-    if (data.last_move) {
-      const [r, c] = data.last_move;
-      highlightLastMove(r, c);
-      const placed = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-      if (placed) {
-        placed.classList.add('placed-move');
-        setTimeout(() => placed.classList.remove('placed-move'), 800);
-      }
+  }
+
+  // 2) 置かれた手を強調
+  if (data.last_move) {
+    const [r, c] = data.last_move;
+    highlightLastMove(r, c);
+    const placed = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    if (placed) {
+      placed.classList.add('placed-move');
+      setTimeout(() => placed.classList.remove('placed-move'), 800);
     }
-    // 3) 直ちに再描画
-    updateBoard(newBoard.map(r => r.slice()), turn);
-    // 4) ひっくり返しアニメ
-    const delay = animateFlips(newBoard, flips);
-    // 5) アニメ後にステータス更新・合法手
-    setTimeout(() => {
-      updateStatusAndHighlight(data, turn);
-      lastBoard = newBoard.map(r => r.slice());
-    }, delay);
-  });
+  }
+
+  // 3) 即時再描画は行わず、旧盤面のままアニメーションへ
+
+  // 4) ひっくり返しアニメ実行
+  const delay = animateFlips(newBoard, flips);
+
+  // 5) アニメ終了後に全体再描画＋状態更新
+  setTimeout(() => {
+    updateBoard(newBoard.map(row => row.slice()), turn);
+    updateStatusAndHighlight(data, turn);
+    lastBoard = newBoard.map(row => row.slice());
+  }, delay);
+});
+
 
   socket.on('error', (message) => {
     alert(message);
