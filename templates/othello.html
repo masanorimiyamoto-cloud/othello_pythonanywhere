@@ -290,7 +290,7 @@
   const newBoard = data.board;
   const turn     = data.turn;
 
-  // 1) ひっくり返しリスト作成
+  // 1) フリップ対象のリストを作成（旧盤面 lastBoard → newBoard の差分）
   const flips = [];
   if (lastBoard) {
     for (let y = 0; y < 8; y++) {
@@ -304,29 +304,33 @@
     }
   }
 
-  // 2) 置かれた手を強調
-  if (data.last_move) {
+  // 2) 置かれた手だけは即座に描画
+  if (Array.isArray(data.last_move)) {
     const [r, c] = data.last_move;
-    highlightLastMove(r, c);
-    const placed = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-    if (placed) {
-      placed.classList.add('placed-move');
-      setTimeout(() => placed.classList.remove('placed-move'), 800);
+    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    if (cell) {
+      // 新しい石を追加
+      const v = newBoard[r][c];
+      const stone = document.createElement('div');
+      stone.className = `stone ${v === -1 ? 'black' : 'white'}`;
+      cell.appendChild(stone);
+      // 強調アニメ（任意）
+      stone.classList.add('placed-move');
+      setTimeout(() => stone.classList.remove('placed-move'), 800);
     }
   }
 
-  // 3) 即時再描画は行わず、旧盤面のままアニメーションへ
-
-  // 4) ひっくり返しアニメ実行
+  // 3) 旧色の石をひっくり返すアニメーション
   const delay = animateFlips(newBoard, flips);
 
-  // 5) アニメ終了後に全体再描画＋状態更新
+  // 4) アニメ終了後に全体再描画＆状態更新
   setTimeout(() => {
     updateBoard(newBoard.map(row => row.slice()), turn);
     updateStatusAndHighlight(data, turn);
     lastBoard = newBoard.map(row => row.slice());
   }, delay);
 });
+
 
 
   socket.on('error', (message) => {
