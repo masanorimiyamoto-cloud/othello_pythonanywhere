@@ -284,16 +284,35 @@
       socket.emit('start_ai_game', { level, game_id:gameId, player_id:playerId });
     });
 
-  document.getElementById('create-room')
+    
+
+   document.getElementById('create-room')
     .addEventListener('click', () => {
-      fetch('/create_room').then(r=>r.json()).then(d=>{
-        socket.emit('join_game',{
-        game_id:   d.game_id,
-        player_id: playerId,
-         name:      'Player-'+playerId.slice(-4)
-       });
-      });
+      fetch('/create_room')
+        .then(res => res.json())
+        .then(data => {
+          const gid = data.game_id;
+          // ① 取得したIDをグローバル変数に保持
+          currentGameId = gid;
+          // ② 入力欄に表示
+          document.getElementById('room-id').value = gid;
+          // ③ ステータスにも表示（任意）
+          document.getElementById('status').textContent = `Created Room: ${gid}`;
+
+          // ④ 自動参加
+          socket.emit('join_game', {
+            game_id:   gid,
+            player_id: playerId,
+            name:      'Player-' + playerId.slice(-4)
+          });
+        })
+        .catch(err => {
+          console.error('Failed to create room:', err);
+          document.getElementById('status').textContent = 'Error creating room';
+         });
     });
+
+
 
   document.getElementById('join-room')
     .addEventListener('click', () => {
