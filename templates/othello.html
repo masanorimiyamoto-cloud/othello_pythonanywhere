@@ -299,12 +299,7 @@
           // ③ ステータスにも表示（任意）
           document.getElementById('status').textContent = `Created Room: ${gid}`;
 
-          // ④ 自動参加
-          socket.emit('join_game', {
-            game_id:   gid,
-            player_id: playerId,
-            name:      'Player-' + playerId.slice(-4)
-          });
+         
         })
         .catch(err => {
           console.error('Failed to create room:', err);
