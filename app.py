@@ -95,38 +95,79 @@ def on_start_ai(data):
 # -----------------------------------------------------------------------------
 # Socket.IO Events: Join Game
 # -----------------------------------------------------------------------------
+# Socket.IO Events: Join Game
 @socketio.on("join_game")
 def handle_join_game(data):
-    game_id   = data["game_id"]
+    print(f"\n=== JOIN GAME REQUEST ===")  # デバッグ開始
+    print(f"Received data: {data}")  # 受信データ表示
+    
+    game_id = data["game_id"]
     player_id = data["player_id"]
-    name      = data.get("name", "Player")
+    name = data.get("name", "Player")
+
+    print(f"Attempting to join game: {game_id} as player: {player_id}")
 
     game_data = game_manager.get_game(game_id)
     if not game_data:
-        emit("error", {"message": "Game not found"}, room=request.sid)
+        error_msg = f"Game not found: {game_id}"
+        print(error_msg)
+        emit("error", {"message": error_msg}, room=request.sid)
         return
 
-    # 既に参加しているプレイヤーかチェック
+    print(f"Current players in game: {[p.id for p in game_data['players']]}")
+
+    # 既存プレイヤーチェック
     existing_player = next((p for p in game_data["players"] if p.id == player_id), None)
     if existing_player:
+        print(f"Player already in game: {player_id}")
         color = -1 if game_data["players"][0].id == player_id else 1
     else:
         if not game_manager.add_player(game_id, player_id, name):
-            emit("error", {"message": "Game is full"}, room=request.sid)
+            error_msg = f"Game is full: {game_id}"
+            print(error_msg)
+            emit("error", {"message": error_msg}, room=request.sid)
             return
         color = -1 if len(game_data["players"]) == 1 else 1
+        print(f"Added new player: {player_id} as {'Black' if color == -1 else 'White'}")
 
     join_room(game_id)
-    players = game_data["players"]
+    print(f"Player {player_id} joined room: {game_id}")
 
-    # 参加者にのみ送信
-    emit("joined", {
+    players = game_data["players"]
+    print(f"Current player count: {len(players)}")
+
+    # 参加者に送信
+    join_payload = {
         "game_id": game_id,
         "players": [{"id": p.id, "name": p.name} for p in players],
         "your_color": color,
         "board": game_data["game"].board,
         "turn": game_data["game"].turn
-    }, room=request.sid)
+    }
+    print(f"Sending 'joined' event to player: {join_payload}")
+    emit("joined", join_payload, room=request.sid)
+
+    # 全員にブロードキャスト
+    state_payload = {
+        "board": game_data["game"].board,
+        "turn": game_data["game"].turn,
+        "players": [{"id": p.id, "name": p.name} for p in players],
+        "status": "ongoing"
+    }
+    print(f"Broadcasting 'game_state' to room: {state_payload}")
+    emit("game_state", state_payload, room=game_id)
+
+    # 2人揃ったらゲーム開始
+    if len(players) == 2 and not game_data.get("ai"):
+        print("Two players joined - starting game")
+        emit("game_started", {
+            "game_id": game_id,
+            "board": game_data["game"].board,
+            "turn": -1,
+            "players": [{"id": p.id, "name": p.name} for p in players]
+        }, room=game_id)
+
+    print("=== JOIN GAME COMPLETE ===\n")
 
     # 全員にゲーム状態をブロードキャスト
     emit("game_state", {

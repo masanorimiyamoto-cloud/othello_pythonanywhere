@@ -208,19 +208,23 @@
   // 3. Socket.IO イベントハンドラ
   //─────────────────────────────────────────
   socket.on('connect', () => {      
+    console.log('Socket connected with ID:', socket.id);
     playerId = socket.id;           // ← 接続時にIDをセット
     console.log('My playerId:', playerId);
   });
 
   socket.on('room_created', data => {
+    console.log('Room created:', data);
     currentGameId = data.game_id;
     document.getElementById('room-id').value = data.game_id;
     document.getElementById('status').textContent = `Room created: ${data.game_id}. Waiting for opponent...`;
   });
 
   socket.on('joined', data => {
+    console.log('Joined game:', data);
     yourColor = data.your_color;
     currentGameId = data.game_id;
+    console.log(`Assigned color: ${yourColor === -1 ? 'Black' : 'White'}`);
     initBoard();
     updateBoard(data.board, data.turn);
     document.getElementById('status').textContent = 
@@ -229,6 +233,7 @@
   });
 
   socket.on('game_started', data => {
+    console.log('Game started:', data);
     currentGameId = data.game_id || currentGameId;
     initBoard();
     updateBoard(data.board, data.turn);
@@ -242,6 +247,7 @@
   });
 
   socket.on('game_state', data => {
+    console.log('Game state update:', data);
     const newBoard = data.board, turn = data.turn;
     // 1) ひっくり返しリスト作成
     const flips = [];
