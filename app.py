@@ -110,12 +110,13 @@ def handle_join_game(data):
     idx = next(i for i, p in enumerate(players) if p.id == player_id)
     color = -1 if idx == 0 else 1
 
+    # 👇 ここが重要：このクライアントだけに送る
     emit("joined", {
         "players":    [{"id": p.id, "name": p.name} for p in players],
         "your_color": color,
         "board":      game_data["game"].board,
         "turn":       game_data["game"].turn
-    })
+    }, room=request.sid)
 
     emit("game_state", {
         "board":   game_data["game"].board,
