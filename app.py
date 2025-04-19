@@ -92,8 +92,7 @@ def on_start_ai(data):
         "status": "ongoing"
     }, room=game_id)
 
-# -----------------------------------------------------------------------------
-# Socket.IO Events: Join Game
+
 # -----------------------------------------------------------------------------
 # Socket.IO Events: Join Game
 @socketio.on("join_game")
@@ -236,7 +235,9 @@ def handle_move(data):
     emit("game_state", payload, room=game_id)
 
     # AI対戦の場合の処理
-    if "ai" in game_data and result["status"] == "ongoing" and game_data["game"].turn == 1:
+    # AI対戦の場合の処理（ゲーム終了でないなら）
+    if "ai" in game_data and result["status"] != "game_over" \
+        and game_data["game"].turn == 1:
         time.sleep(BASE_DELAY)  # AIの思考時間
         emit("ai_thinking", {}, room=game_id)
         r, c = game_data["ai"].choose_move(game_data["game"])
