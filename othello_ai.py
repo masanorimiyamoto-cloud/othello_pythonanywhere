@@ -2,7 +2,7 @@ from othello import OthelloGame
 import math
 
 class OthelloAI:
-    LEVEL_DEPTH = { 3: 2, 4: 3, 5: 5 }
+    LEVEL_DEPTH = { 3: 2, 4: 3, 5: 4 }
 
     def __init__(self, level=4):
         self.max_depth = self.LEVEL_DEPTH.get(level, 4)
