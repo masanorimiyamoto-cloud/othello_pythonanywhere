@@ -20,7 +20,7 @@ socketio = SocketIO(app)
 game_manager = GameManager()
 AI_PLAYER_ID = "AI"
 # Human move delay parameters
-BASE_DELAY    = 1.5   # seconds
+BASE_DELAY    = 1.0   # seconds
 PER_FLIP_SEC  = 0.1   # additional seconds per flipped stone
 
 # -----------------------------------------------------------------------------
@@ -238,7 +238,10 @@ def handle_move(data):
     # AI対戦の場合の処理（ゲーム終了でないなら）
     if "ai" in game_data and result["status"] != "game_over" \
         and game_data["game"].turn == 1:
-        time.sleep(BASE_DELAY)  # AIの思考時間
+        # Calculate delay based on flipped stones
+        flipped_stones = result.get("flipped", 0)
+        ai_delay = BASE_DELAY + (PER_FLIP_SEC * flipped_stones)
+        time.sleep(ai_delay)  # AIの思考時間
         emit("ai_thinking", {}, room=game_id)
         r, c = game_data["ai"].choose_move(game_data["game"])
         ai_result = game_data["game"].make_move(r, c)
