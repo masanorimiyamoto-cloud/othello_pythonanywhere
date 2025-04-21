@@ -31,29 +31,23 @@
     }
 
     /* 石を 3D 回転させる基礎スタイル */
-.stone {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-}
-
-/* 黒→白 のとき */
-@keyframes flipBlackToWhite {
-  0%, 49%   { transform: rotateY(0deg);   background-color: #222; }
-  50%       { transform: rotateY(90deg);  background-color: #fff; }
-  100%      { transform: rotateY(180deg); background-color: #fff; }
-}
-
-/* 白→黒 のとき */
-@keyframes flipWhiteToBlack {
-  0%, 49%   { transform: rotateY(0deg);   background-color: #fff; }
-  50%       { transform: rotateY(90deg);  background-color: #222; }
-  100%      { transform: rotateY(180deg); background-color: #222; }
-}
-
-
+    .stone {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      backface-visibility: hidden;
+      transform-style: preserve-3d;
+    }
+    @keyframes flipBlackToWhite {
+      0%, 49%   { transform: rotateY(0deg);   background-color: #222; }
+      50%       { transform: rotateY(90deg);  background-color: #fff; }
+      100%      { transform: rotateY(180deg); background-color: #fff; }
+    }
+    @keyframes flipWhiteToBlack {
+      0%, 49%   { transform: rotateY(0deg);   background-color: #fff; }
+      50%       { transform: rotateY(90deg);  background-color: #222; }
+      100%      { transform: rotateY(180deg); background-color: #222; }
+    }
   </style>
 </head>
 <body>
@@ -73,281 +67,275 @@
   <div id="score"></div>
   <div id="board"></div>
 
+  {% raw %}
   <script>
-  //─────────────────────────────────────────
-  // 1. グローバル変数／初期化
-  //─────────────────────────────────────────
-  const socket    = io();
-  let currentGameId = null;
-  let playerId      = 'player-' + Math.random().toString(36).slice(2,9);
-  let yourColor     = null;     // -1=Black, +1=White
-  let prevLastMove  = null;     // [row, col]
-  let lastBoard     = null;     // 前回盤面(2D配列)
-  const directions  = [
-    {dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},
-    {dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}
-  ];
+    //─────────────────────────────────────────
+    // 1. グローバル変数／初期化
+    //─────────────────────────────────────────
+    const socket       = io();
+    let currentGameId  = null;
+    let playerId       = 'player-' + Math.random().toString(36).slice(2,9);
+    let yourColor      = null;     // -1=Black, +1=White
+    let prevLastMove   = null;     // [row, col]
+    let lastBoard      = null;     // 前回盤面(2D配列)
+    const directions   = [
+      {dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1},
+      {dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}
+    ];
 
-  function initBoard() {
-    const board = document.getElementById('board');
-    board.innerHTML = '';
-    for (let r=0; r<8; r++) {
-      for (let c=0; c<8; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.row = r;
-        cell.dataset.col = c;
-        board.appendChild(cell);
-      }
-    }
-  }
-
-  //─────────────────────────────────────────
-  // 2. ユーティリティ関数
-  //─────────────────────────────────────────
-  function computeLegalMoves(board, color) {
-    const opponent = -color, moves = [];
-    for (let y=0; y<8; y++) {
-      for (let x=0; x<8; x++) {
-        if (board[y][x]!==0) continue;
-        for (const {dx,dy} of directions) {
-          let nx=x+dx, ny=y+dy, hasOpp=false;
-          while (ny>=0 && ny<8 && nx>=0 && nx<8 && board[ny][nx]===opponent) {
-            hasOpp = true; nx+=dx; ny+=dy;
-          }
-          if (hasOpp && ny>=0 && ny<8 && nx>=0 && nx<8 && board[ny][nx]===color) {
-            moves.push({y,x}); break;
-          }
+    function initBoard() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          board.appendChild(cell);
         }
       }
     }
-    return moves;
-  }
 
-  function highlightLastMove(r, c) {
-    if (prevLastMove) {
-      const [pr,pc] = prevLastMove;
-      document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`)
-              ?.classList.remove('last-move');
+    //─────────────────────────────────────────
+    // 2. ユーティリティ関数
+    //─────────────────────────────────────────
+    function computeLegalMoves(board, color) {
+      const opponent = -color, moves = [];
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          if (board[y][x] !== 0) continue;
+          for (const {dx, dy} of directions) {
+            let nx = x+dx, ny = y+dy, hasOpp = false;
+            while (ny >= 0 && ny < 8 && nx >= 0 && nx < 8 && board[ny][nx] === opponent) {
+              hasOpp = true; nx += dx; ny += dy;
+            }
+            if (hasOpp && ny >= 0 && ny < 8 && nx >= 0 && nx < 8 && board[ny][nx] === color) {
+              moves.push({y,x}); break;
+            }
+          }
+        }
+      }
+      return moves;
     }
-    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-    if (cell) {
-      cell.classList.add('last-move');
-      prevLastMove = [r,c];
-    }
-  }
 
-  function updateBoard(board, turn) {
-    // Clear
-    document.querySelectorAll('.cell').forEach(cell=>{
-      cell.innerHTML=''; cell.onclick=null;
-    });
-    // Draw stones
-    for (let y=0; y<8; y++) {
-      for (let x=0; x<8; x++) {
-        const v = board[y][x];
-        if (v===-1 || v===1) {
+    function highlightLastMove(r, c) {
+      if (prevLastMove) {
+        const [pr, pc] = prevLastMove;
+        document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`)
+                ?.classList.remove('last-move');
+      }
+      const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+      if (cell) {
+        cell.classList.add('last-move');
+        prevLastMove = [r, c];
+      }
+    }
+
+    function updateBoard(board, turn) {
+      document.querySelectorAll('.cell').forEach(cell => {
+        cell.innerHTML = '';
+        cell.onclick = null;
+      });
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const v = board[y][x];
+          if (v === -1 || v === 1) {
+            const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+            const stone = document.createElement('div');
+            stone.className = `stone ${v===-1?'black':'white'}`;
+            cell.appendChild(stone);
+          }
+        }
+      }
+      if (yourColor !== null && turn === yourColor) {
+        computeLegalMoves(board, yourColor).forEach(({y,x}) => {
           const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-          const stone = document.createElement('div');
-          stone.className = `stone ${v===-1?'black':'white'}`;
-          cell.appendChild(stone);
-        }
+          cell.onclick = () => makeMove(y, x);
+        });
       }
     }
-    // Legal moves (only your turn)
-    if (yourColor!==null && turn===yourColor) {
-      computeLegalMoves(board,yourColor).forEach(({y,x})=>{
-        const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-        cell.onclick = ()=> makeMove(y,x);
+
+    function makeMove(r, c) {
+      if (!currentGameId) { alert('Please join a game first!'); return; }
+      if (yourColor === null) { alert('Please wait for the game to start!'); return; }
+      socket.emit('make_move', {
+        game_id: currentGameId,
+        player_id: playerId,
+        row: r, col: c
       });
     }
-  }
 
-  function makeMove(r,c) {
-    if (!currentGameId) { alert('Please join a game first!'); return; }
-    if (yourColor === null) { alert('Please wait for the game to start!'); return; }
-    socket.emit('make_move', {
-      game_id: currentGameId,
-      player_id: playerId,
-      row: r, col: c
-    });
-  }
-
-  function animateFlips(flips) {
-  const perDelay = 200;  // 石ごとの開始ディレイ (お好みで調整)
-  const duration = 600;  // CSS の flipStone アニメと合わせる
-
-  flips.forEach(({ y, x }, i) => {
-    setTimeout(() => {
-      // 対象の .stone 要素を取得
-      const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-      const stone = cell?.querySelector('.stone');
-      if (!stone) return;
-
-      // 回転アニメ開始
-      stone.classList.add('flipping');
-
-      // アニメ完了後に .flipping を外し、transform をリセット
-      setTimeout(() => {
-        stone.classList.remove('flipping');
-        stone.style.transform = 'rotateY(0deg)';
-      }, duration);
-    }, i * perDelay);
-  });
-
-  // 全体のアニメ終了時間
-  return flips.length * perDelay + duration;
-}
-
-
-
-  function updateStatusAndHighlight(data, turn) {
-    // Turn 表示
-    let txt;
-    if (data.status==='game_over') {
-      txt = `Game Over — W:${data.score.white} B:${data.score.black}`;
-    } else {
-      const t = turn===-1?'Black':'White';
-      txt = `Turn: ${t}` + (turn===yourColor?' (Your move)':'');
-    }
-    document.getElementById('status').textContent = txt;
-    // Score
-    document.getElementById('score').textContent =
-      data.status==='game_over'
-        ? `Final Score — W:${data.score.white} B:${data.score.black}`
-        : '';
-    // Legal moves
-    if (data.status!=='game_over' && turn===yourColor) {
-      computeLegalMoves(data.board,yourColor).forEach(({y,x})=>{
-        const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
-        cell.onclick = ()=> makeMove(y,x);
+    function animateFlips(flips) {
+      const perDelay = 200;
+      const duration = 600;
+      flips.forEach(({y, x}, i) => {
+        setTimeout(() => {
+          const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+          const stone = cell?.querySelector('.stone');
+          if (!stone) return;
+          stone.classList.add('flipping');
+          setTimeout(() => {
+            stone.classList.remove('flipping');
+            stone.style.transform = 'rotateY(0deg)';
+          }, duration);
+        }, i*perDelay);
       });
+      return flips.length*perDelay + duration;
     }
-  }
 
-  //─────────────────────────────────────────
-  // 3. Socket.IO イベントハンドラ
-  //─────────────────────────────────────────
-  socket.on('connect', () => {      
-    console.log('Socket connected with ID:', socket.id);
-    playerId = socket.id;           // ← 接続時にIDをセット
-    console.log('My playerId:', playerId);
-  });
-
-  socket.on('room_created', data => {
-    console.log('Room created:', data);
-    currentGameId = data.game_id;
-    document.getElementById('room-id').value = data.game_id;
-    document.getElementById('status').textContent = `Room created: ${data.game_id}. Waiting for opponent...`;
-  });
-
-  socket.on('joined', data => {
-    console.log('Joined game:', data);
-    yourColor = data.your_color;
-    currentGameId = data.game_id;
-    console.log(`Assigned color: ${yourColor === -1 ? 'Black' : 'White'}`);
-    initBoard();
-    updateBoard(data.board, data.turn);
-    document.getElementById('status').textContent = 
-      `Joined as ${yourColor === -1 ? 'Black' : 'White'}. Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-    lastBoard = data.board.map(r => r.slice());
-  });
-
-  socket.on('game_started', data => {
-    console.log('Game started:', data);
-    currentGameId = data.game_id || currentGameId;
-    initBoard();
-    updateBoard(data.board, data.turn);
-    document.getElementById('status').textContent =
-      `Game started. Turn: ${data.turn === -1 ? 'Black' : 'White'}`;
-    lastBoard = data.board.map(r => r.slice());
-  });
-
-  socket.on('ai_thinking', () => {
-    document.getElementById('status').textContent = 'AI is thinking…';
-  });
-
-  socket.on('game_state', data => {
-  const newBoard = data.board;
-  const turn     = data.turn;
-
-  // (A) 前回盤面から“ひっくり返すべき石”を抽出
-  const flips = [];
-  if (lastBoard) {
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        const oldVal = lastBoard[y][x];
-        const newVal = newBoard[y][x];
-        if (oldVal !== 0 && oldVal !== newVal) {
-          flips.push({ y, x });
-        }
+    function updateStatusAndHighlight(data, turn) {
+      let txt;
+      if (data.status==='game_over') {
+        txt = `Game Over — W:${data.score.white} B:${data.score.black}`;
+      } else {
+        const t = turn===-1?'Black':'White';
+        txt = `Turn: ${t}` + (turn===yourColor?' (Your move)':'');
+      }
+      document.getElementById('status').textContent = txt;
+      document.getElementById('score').textContent =
+        data.status==='game_over'
+          ? `Final Score — W:${data.score.white} B:${data.score.black}`
+          : '';
+      if (data.status!=='game_over' && turn===yourColor) {
+        computeLegalMoves(data.board, yourColor).forEach(({y,x}) => {
+          const cell = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+          cell.onclick = () => makeMove(y,x);
+        });
       }
     }
-  }
 
-  // (B) “置かれた一手”だけは即座に描画して強調
-  if (Array.isArray(data.last_move)) {
-    const [r, c] = data.last_move;
-    const cell   = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-    if (cell) {
-      const v     = newBoard[r][c];
-      const stone = document.createElement('div');
-      stone.className = `stone ${v === -1 ? 'black' : 'white'}`;
-      cell.appendChild(stone);
-      stone.classList.add('placed-move');
-      setTimeout(() => stone.classList.remove('placed-move'), 800);
-    }
-  }
-
-  // (C) 旧色の石を回転させるアニメ
-  const delay = animateFlips(flips);
-
-  // (D) アニメ終了後に全体を newBoard で再描画＆状態更新
-  setTimeout(() => {
-    updateBoard(newBoard.map(r => r.slice()), turn);
-    updateStatusAndHighlight(data, turn);
-    lastBoard = newBoard.map(r => r.slice());
-  }, delay);
-});
-
-
-
-
-  socket.on('error', (message) => {
-    alert(message);
-  });
-
-  //─────────────────────────────────────────
-  // 4. UI ボタンイベント
-  //─────────────────────────────────────────
-  document.getElementById('start-ai-game')
-    .addEventListener('click', () => {
-      const level  = +document.getElementById('ai-level').value;
-      const gameId = document.getElementById('room-id').value.trim();
-      yourColor = -1; // プレイヤーは常に先手(黒)
-      socket.emit('start_ai_game', { level, game_id: gameId, player_id: playerId });
+    //─────────────────────────────────────────
+    // 3. Socket.IO イベントハンドラ
+    //─────────────────────────────────────────
+    socket.on('connect', () => {
+      playerId = socket.id;
     });
 
-  document.getElementById('create-room')
-    .addEventListener('click', () => {
-      socket.emit('create_room', { player_id: playerId });
+    socket.on('joined', data => {
+      yourColor     = data.your_color;
+      currentGameId = data.game_id;
+      initBoard();
+      updateBoard(data.board, data.turn);
+      lastBoard = data.board.map(r=>r.slice());
+      document.getElementById('status').textContent =
+        `Joined as ${yourColor===-1?'Black':'White'}. Turn: ${data.turn===-1?'Black':'White'}`;
     });
 
-  document.getElementById('join-room')
-    .addEventListener('click', () => {
-      const rid = document.getElementById('room-id').value.trim();
-      if (!rid) return alert('Please enter a Room ID');
-      socket.emit('join_game', { 
-        game_id: rid, 
-        player_id: playerId, 
-        name: 'Player-' + playerId.slice(-4) 
+    socket.on('game_state', data => {
+      const board  = data.board;
+      const turn   = data.turn;
+      const status = data.status;
+      const score  = data.score;
+
+      // パス
+      if (status==='pass') {
+        document.getElementById('status').textContent = 'パス — あなたの番です';
+        updateBoard(board, turn);
+        lastBoard = board.map(r=>r.slice());
+        return;
+      }
+      // ゲームオーバー
+      if (status==='game_over') {
+        updateBoard(board, null);
+        showGameOverScreen(score);
+        lastBoard = board.map(r=>r.slice());
+        return;
+      }
+      // 人間の手
+      document.getElementById('status').textContent = 'AI is thinking…';
+      updateBoard(board, turn);
+      lastBoard = board.map(r=>r.slice());
+    });
+
+    socket.on('ai_thinking', () => {
+      document.getElementById('status').textContent = 'AI is thinking…';
+    });
+
+    socket.on('ai_move', data => {
+      const newBoard = data.board;
+      const turn     = data.turn;
+      const status   = data.status;
+      const score    = data.score;
+
+      const flips = [];
+      for (let y=0; y<8; y++){
+        for (let x=0; x<8; x++){
+          if (lastBoard[y][x]!==0 && lastBoard[y][x]!==newBoard[y][x]){
+            flips.push({y,x});
+          }
+        }
+      }
+      const delay = animateFlips(flips);
+      setTimeout(()=>{
+        if (status==='pass') {
+          document.getElementById('status').textContent = 'AI passed — あなたの番です';
+          updateBoard(newBoard, turn);
+        } else if (status==='game_over') {
+          updateBoard(newBoard, null);
+          showGameOverScreen(score);
+        } else {
+          updateBoard(newBoard, turn);
+          updateStatusAndHighlight(data, turn);
+        }
+        lastBoard = newBoard.map(r=>r.slice());
+      }, delay);
+    });
+
+    //─────────────────────────────────────────
+    // 4. UI ボタンイベント
+    //─────────────────────────────────────────
+    document.getElementById('start-ai-game')
+      .addEventListener('click', () => {
+        const level  = +document.getElementById('ai-level').value;
+        const gameId = document.getElementById('room-id').value.trim();
+        yourColor = -1;
+        socket.emit('start_ai_game', { level, game_id: gameId, player_id: playerId });
       });
-    });
+    document.getElementById('create-room')
+      .addEventListener('click', () => {
+        socket.emit('create_room', { player_id: playerId });
+      });
+    document.getElementById('join-room')
+      .addEventListener('click', () => {
+        const rid = document.getElementById('room-id').value.trim();
+        if (!rid) return alert('Please enter a Room ID');
+        socket.emit('join_game', { game_id: rid, player_id: playerId, name:'Player-'+playerId.slice(-4) });
+      });
 
-  //─────────────────────────────────────────
-  // 5. 初期描画
-  //─────────────────────────────────────────
-  initBoard();
+    /**
+     * ゲームオーバー画面を表示する関数
+     */
+    function showGameOverScreen(score) {
+      const existing = document.getElementById('game-over-overlay');
+      if (existing) existing.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'game-over-overlay';
+      Object.assign(overlay.style, {
+        position: 'fixed', top:0, left:0, width:'100%', height:'100%',
+        backgroundColor:'rgba(0,0,0,0.7)', display:'flex',
+        alignItems:'center',justifyContent:'center',zIndex:1000
+      });
+      const container = document.createElement('div');
+      Object.assign(container.style, {
+        backgroundColor:'#fff',padding:'24px',
+        borderRadius:'8px',textAlign:'center',minWidth:'300px'
+      });
+      container.innerHTML = `
+        <h2>Game Over</h2>
+        <p>White: ${score.white} — Black: ${score.black}</p>
+        <button id="restart-btn">Play Again</button>
+      `;
+      overlay.appendChild(container);
+      document.body.appendChild(overlay);
+      document.getElementById('restart-btn').addEventListener('click', ()=>window.location.reload());
+    }
+
+    //─────────────────────────────────────────
+    // 5. 初期描画
+    //─────────────────────────────────────────
+    initBoard();
   </script>
+  {% endraw %}
 </body>
 </html>

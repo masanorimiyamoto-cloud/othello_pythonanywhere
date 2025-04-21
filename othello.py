@@ -1,9 +1,8 @@
-# othello.py など別モジュールとして管理する例
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 class OthelloGame:
     DIRECTIONS = [(-1, -1), (-1, 0), (-1, 1),
-                  (0, -1),           (0, 1),
+                  (0, -1),          (0, 1),
                   (1, -1),  (1, 0),  (1, 1)]
     
     def __init__(self):
@@ -12,7 +11,7 @@ class OthelloGame:
 
     @staticmethod
     def init_board() -> List[List[int]]:
-        board = [[0 for _ in range(8)] for _ in range(8)]
+        board = [[0]*8 for _ in range(8)]
         board[3][3] = board[4][4] = 1    # 白
         board[3][4] = board[4][3] = -1   # 黒
         return board
@@ -34,18 +33,21 @@ class OthelloGame:
                 flips.extend(path)
         return flips
 
+    def valid_moves(self, turn: int) -> List[Tuple[int, int]]:
+        """指定色 turn の合法手を (row, col) のリストで返す"""
+        return [(r, c) for r in range(8) for c in range(8)
+               if self.board[r][c] == 0 and self.stones_to_flip(r, c, turn)]
+
     def has_valid_move(self, turn: int) -> bool:
-        for r in range(8):
-            for c in range(8):
-                if self.board[r][c] == 0 and self.stones_to_flip(r, c, turn):
-                    return True
-        return False
-    
-    def make_move(self, row: int, col: int) -> dict:
-        """
-        手を打って盤面を更新する。
-        戻り値は更新された情報（盤面・手番・パス状態など）をまとめた辞書。
-        """
+        return len(self.valid_moves(turn)) > 0
+
+    def check_game_over(self) -> bool:
+        """ゲーム終了条件をチェック"""
+        current_moves = self.has_valid_move(self.turn)
+        next_moves = self.has_valid_move(-self.turn)
+        return not current_moves and not next_moves
+
+    def make_move(self, row: int, col: int) -> Dict:
         if self.board[row][col] != 0:
             return {"status": "cell occupied"}
 
@@ -53,33 +55,39 @@ class OthelloGame:
         if not flips:
             return {"status": "invalid move"}
 
-        # 手を打った場所に石を置く
+        # 石を置いて反転
         self.board[row][col] = self.turn
-        # ひっくり返す
         for r, c in flips:
             self.board[r][c] = self.turn
 
-        next_turn = -self.turn
-        passed = False
-        if not self.has_valid_move(next_turn):
-            # 次のプレイヤーに合法手がなければ，現プレイヤーが打てるかでゲーム終了かパスを決定
-            if not self.has_valid_move(self.turn):
-                # ゲーム終了
-                white = sum(cell == 1 for row in self.board for cell in row)
-                black = sum(cell == -1 for row in self.board for cell in row)
-                return {"status": "game_over", "board": self.board,
-                        "score": {"white": white, "black": black}}
-            # パス処理の場合、手番は元に戻す
-            next_turn = self.turn
-            passed = True
+        # ゲーム終了チェック
+        if self.check_game_over():
+            white = sum(cell == 1 for row in self.board for cell in row)
+            black = sum(cell == -1 for row in self.board for cell in row)
+            return {
+                "status": "game_over",
+                "score": {"white": white, "black": black},
+                "board": self.board
+            }
 
+        # 次のプレイヤーの合法手をチェック
+        next_turn = -self.turn
+        if not self.has_valid_move(next_turn):
+            # パス処理
+            self.turn = self.turn  # ターンを変更しない
+            return {
+                "status": "pass",
+                "message": f"Player {next_turn} has no valid moves",
+                "board": self.board,
+                "turn": self.turn,
+                "legal_moves": self.valid_moves(self.turn)
+            }
+
+        # 正常にターン更新
         self.turn = next_turn
-        return {"status": "success", "board": self.board, "turn": self.turn, "passed": passed}
-    def valid_moves(self, turn: int) -> List[Tuple[int,int]]:
-            """指定色 turn の合法手を (row, col) のリストで返す."""
-            moves: List[Tuple[int,int]] = []
-            for r in range(8):
-                for c in range(8):
-                    if self.board[r][c] == 0 and self.stones_to_flip(r, c, turn):
-                        moves.append((r, c))
-            return moves
+        return {
+            "status": "success",
+            "board": self.board,
+            "turn": self.turn,
+            "legal_moves": self.valid_moves(self.turn)
+        }

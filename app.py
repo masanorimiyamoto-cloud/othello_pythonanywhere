@@ -168,97 +168,81 @@ def handle_join_game(data):
 
     print("=== JOIN GAME COMPLETE ===\n")
 
-    # 全員にゲーム状態をブロードキャスト
-    emit("game_state", {
-        "board": game_data["game"].board,
-        "turn": game_data["game"].turn,
-        "players": [{"id": p.id, "name": p.name} for p in players],
-        "status": "ongoing"
-    }, room=game_id)
+    
 
-    # 2人揃ったらゲーム開始
-    if len(players) == 2 and not game_data.get("ai"):
-        emit("game_started", {
-            "game_id": game_id,
-            "board": game_data["game"].board,
-            "turn": -1,  # 黒から開始
-            "players": [{"id": p.id, "name": p.name} for p in players]
-        }, room=game_id)
-
-# -----------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Socket.IO Events: Move Handling
-# -----------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 @socketio.on("make_move")
 def handle_move(data):
-    game_id    = data.get("game_id")
-    player_id  = data.get("player_id")
-    row, col   = data.get("row"), data.get("col")
+    game_id   = data.get("game_id")
+    player_id = data.get("player_id")
+    row, col  = data.get("row"), data.get("col")
 
     game_data = game_manager.get_game(game_id)
-    if not game_data:
-        emit("error", {"message": "Game not found"}, room=request.sid)
-        return
+    # … your existing validation here …
 
-    # プレイヤー確認
-    try:
-        player_index = next(i for i, p in enumerate(game_data["players"]) if p.id == player_id)
-    except StopIteration:
-        emit("error", {"message": "Player not in game"}, room=request.sid)
-        return
-
-    # ターン確認
-    expected_color = -1 if player_index == 0 else 1
-    if game_data["game"].turn != expected_color:
-        emit("error", {"message": "Not your turn"}, room=request.sid)
-        return
-
-    # 移動実行
+    # 1) Apply the human move and broadcast immediately
+    
     result = game_data["game"].make_move(row, col)
-    if result["status"] in ("cell occupied", "invalid move"):
-        emit("error", {"message": result.get("message", "Invalid move")}, room=request.sid)
+    human_payload = {
+        "board":      game_data["game"].board,
+        "turn":       game_data["game"].turn,
+        "last_move":  [row, col],
+        "status":     result["status"],
+        "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]]
+    }
+    emit("game_state", human_payload, room=game_id)
+
+    # 2) If it’s an AI game and not over, schedule the AI move in background
+    if "ai" in game_data and result["status"] != "game_over" and game_data["game"].turn == 1:
+        # start background task so this handler returns immediately
+        socketio.start_background_task(run_ai_move, game_id)
+
+
+def run_ai_move(game_id):
+    """Background task: pick, delay, and emit the AI’s white move."""
+    game_data = game_manager.get_game(game_id)
+    if not game_data:
         return
 
-    # ゲーム状態更新
-    payload = {
-        "board": game_data["game"].board,
-        "turn": game_data["game"].turn,
-        "last_move": [row, col],
-        "status": result["status"],
-        "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
+    # A) notify clients that AI is thinking
+    socketio.emit("ai_thinking", {}, room=game_id)
+
+    # B) count how many stones the human just flipped:
+    before = [row[:] for row in game_data["game"].board]
+    # pick & apply the AI’s move
+    r, c   = game_data["ai"].choose_move(game_data["game"])
+    ai_res = game_data["game"].make_move(r, c)
+    after  = game_data["game"].board
+    flips_count = sum(
+        1
+        for y in range(8) for x in range(8)
+        if before[y][x] != 0 and before[y][x] != after[y][x]
+    )
+
+    # C) delay proportional to human flips
+    delay = BASE_DELAY + PER_FLIP_SEC * flips_count
+    time.sleep(delay)
+
+    # D) emit the AI’s move on its own channel
+    ai_payload = {
+        "board":      after,
+        "turn":       game_data["game"].turn,
+        "last_move":  [r, c],
+        "status":     ai_res["status"],
+        "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]]
     }
-    if result["status"] == "game_over":
-        payload["score"] = {
-            "white": int(result["score"]["white"]),
-            "black": int(result["score"]["black"])
+    if ai_res["status"] == "game_over":
+        ai_payload["score"] = {
+            "white": int(ai_res["score"]["white"]),
+            "black": int(ai_res["score"]["black"])
         }
 
-    emit("game_state", payload, room=game_id)
+    socketio.emit("ai_move", ai_payload, room=game_id)
 
-    # AI対戦の場合の処理
-    # AI対戦の場合の処理（ゲーム終了でないなら）
-    if "ai" in game_data and result["status"] != "game_over" \
-        and game_data["game"].turn == 1:
-        # Calculate delay based on flipped stones
-        flipped_stones = result.get("flipped", 0)
-        ai_delay = BASE_DELAY + (PER_FLIP_SEC * flipped_stones)
-        time.sleep(ai_delay)  # AIの思考時間
-        emit("ai_thinking", {}, room=game_id)
-        r, c = game_data["ai"].choose_move(game_data["game"])
-        ai_result = game_data["game"].make_move(r, c)
-        
-        ai_payload = {
-            "board": game_data["game"].board,
-            "turn": game_data["game"].turn,
-            "last_move": [r, c],
-            "status": ai_result["status"],
-            "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
-        }
-        if ai_result["status"] == "game_over":
-            ai_payload["score"] = {
-                "white": int(ai_result["score"]["white"]),
-                "black": int(ai_result["score"]["black"])
-            }
-        emit("game_state", ai_payload, room=game_id)
+
+
 
 # -----------------------------------------------------------------------------
 # Main Entry
