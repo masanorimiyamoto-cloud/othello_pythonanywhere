@@ -209,30 +209,41 @@ def run_ai_move(game_id):
     # A) notify clients that AI is thinking
     socketio.emit("ai_thinking", {}, room=game_id)
 
-    # B) count how many stones the human just flipped:
+    # B) 変更点1: 変更前の盤面をディープコピー
     before = [row[:] for row in game_data["game"].board]
+    
     # pick & apply the AI’s move
     r, c   = game_data["ai"].choose_move(game_data["game"])
     ai_res = game_data["game"].make_move(r, c)
     after  = game_data["game"].board
-    flips_count = sum(
-        1
-        for y in range(8) for x in range(8)
-        if before[y][x] != 0 and before[y][x] != after[y][x]
-    )
+    
+    # 変更点2: 反転した石と新しい石を検出
+    flips = []
+    new_stone = None
+    for y in range(8):
+        for x in range(8):
+            # 新しい石の検出 (0 → 1)
+            if before[y][x] == 0 and after[y][x] == 1:
+                new_stone = {"y": y, "x": x}
+            # 反転した石の検出 (-1 → 1)
+            elif before[y][x] == -1 and after[y][x] == 1:
+                flips.append({"y": y, "x": x})
 
     # C) delay proportional to human flips
-    delay = BASE_DELAY + PER_FLIP_SEC * flips_count
+    delay = BASE_DELAY + PER_FLIP_SEC * len(flips)
     time.sleep(delay)
 
-    # D) emit the AI’s move on its own channel
+    # D) 変更点3: 新しい石と反転情報を追加
     ai_payload = {
         "board":      after,
         "turn":       game_data["game"].turn,
         "last_move":  [r, c],
         "status":     ai_res["status"],
-        "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]]
+        "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]],
+        "new_stone":  new_stone,  # 新しい石の位置
+        "flips":      flips       # 反転した石のリスト
     }
+    
     if ai_res["status"] == "game_over":
         ai_payload["score"] = {
             "white": int(ai_res["score"]["white"]),

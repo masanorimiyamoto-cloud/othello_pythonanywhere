@@ -2,10 +2,12 @@ from othello import OthelloGame
 import math
 
 class OthelloAI:
-    LEVEL_DEPTH = { 3: 2, 4: 3, 5: 4 }
+    LEVEL_DEPTH = {1:1, 2:2 ,3:3 ,4:4 ,5:5 }
 
-    def __init__(self, level=4):
+    def __init__(self, level=3):
         self.max_depth = self.LEVEL_DEPTH.get(level, 4)
+    # …あとはそのまま…
+
         self.value_table = [
             [100, -20, 10, 5, 5, 10, -20, 100],
             [-20, -50, -2, -2, -2, -2, -50, -20],
@@ -16,7 +18,10 @@ class OthelloAI:
             [-20, -50, -2, -2, -2, -2, -50, -20],
             [100, -20, 10, 5, 5, 10, -20, 100]
         ]
-
+     # ← ここから追加 ↓
+        # Transposition Table: {(board_tuple, turn, depth): (eval, best_move)}
+        self.tt = {}
+        # ← ここまで追加 ↑
     def evaluate(self, game: OthelloGame) -> float:
         board = game.board
         white_count = black_count = 0
@@ -81,48 +86,85 @@ class OthelloAI:
         )
         return score
 
+    def choose_move(self, game: OthelloGame):
+        # 毎回 tt は使い回すため、深さ変わるなら必要に応じてクリアも検討
+        self.tt.clear()
+        _, move = self.minimax(game, self.max_depth, -math.inf, math.inf, True)
+        return move
+
     def minimax(self, game: OthelloGame, depth, alpha, beta, maximizing_player):
+        # Transposition lookup
+        key = (tuple(sum(game.board, [])), game.turn, depth)
+        if key in self.tt:
+            return self.tt[key]
+
+        # Base case
         if depth == 0 or not game.has_valid_move(game.turn):
-            return self.evaluate(game), None
+            val = self.evaluate(game)
+            self.tt[key] = (val, None)
+            return val, None
 
         best_move = None
         if maximizing_player:
             max_eval = -math.inf
+
+            # --- ムーブオーダリング: まず合法手リストを作る ---
+            moves = []
             for r in range(8):
                 for c in range(8):
-                    if game.board[r][c] != 0:
-                        continue
-                    if not game.stones_to_flip(r, c, game.turn):
-                        continue
-                    clone = OthelloGame()
-                    clone.board = [row[:] for row in game.board]
-                    clone.turn = game.turn
-                    clone.make_move(r, c)
-                    eval_score, _ = self.minimax(clone, depth-1, alpha, beta, False)
-                    if eval_score > max_eval:
-                        max_eval, best_move = eval_score, (r, c)
-                    alpha = max(alpha, eval_score)
-                    if beta <= alpha:
-                        break
+                    flips = game.stones_to_flip(r, c, game.turn)
+                    if flips:
+                        # コーナー優先 + flip数大きい順
+                        score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
+                        moves.append((score, (r,c), flips))
+            # スコア降順
+            moves.sort(key=lambda x: -x[0])
+
+            for _, (r,c), flips in moves:
+                # クローンして一手進める
+                clone = OthelloGame()
+                clone.board = [row[:] for row in game.board]
+                clone.turn  = game.turn
+                clone.make_move(r, c)
+
+                eval_score, _ = self.minimax(clone, depth-1, alpha, beta, False)
+                if eval_score > max_eval:
+                    max_eval, best_move = eval_score, (r, c)
+                alpha = max(alpha, eval_score)
+                if beta <= alpha:
+                    break
+
+            self.tt[key] = (max_eval, best_move)
             return max_eval, best_move
+
         else:
             min_eval = math.inf
+
+            # --- ムーブオーダリング（相手なのでスコア昇順） ---
+            moves = []
             for r in range(8):
                 for c in range(8):
-                    if game.board[r][c] != 0:
-                        continue
-                    if not game.stones_to_flip(r, c, game.turn):
-                        continue
-                    clone = OthelloGame()
-                    clone.board = [row[:] for row in game.board]
-                    clone.turn = game.turn
-                    clone.make_move(r, c)
-                    eval_score, _ = self.minimax(clone, depth-1, alpha, beta, True)
-                    if eval_score < min_eval:
-                        min_eval, best_move = eval_score, (r, c)
-                    beta = min(beta, eval_score)
-                    if beta <= alpha:
-                        break
+                    flips = game.stones_to_flip(r, c, game.turn)
+                    if flips:
+                        score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
+                        moves.append((score, (r,c), flips))
+            # スコア昇順
+            moves.sort(key=lambda x: x[0])
+
+            for _, (r,c), flips in moves:
+                clone = OthelloGame()
+                clone.board = [row[:] for row in game.board]
+                clone.turn  = game.turn
+                clone.make_move(r, c)
+
+                eval_score, _ = self.minimax(clone, depth-1, alpha, beta, True)
+                if eval_score < min_eval:
+                    min_eval, best_move = eval_score, (r, c)
+                beta = min(beta, eval_score)
+                if beta <= alpha:
+                    break
+
+            self.tt[key] = (min_eval, best_move)
             return min_eval, best_move
 
     def choose_move(self, game: OthelloGame):
