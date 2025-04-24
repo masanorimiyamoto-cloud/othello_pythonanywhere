@@ -201,56 +201,112 @@ def handle_move(data):
 
 
 def run_ai_move(game_id):
-    """Background task: pick, delay, and emit the AI’s white move."""
     game_data = game_manager.get_game(game_id)
     if not game_data:
         return
 
-    # A) notify clients that AI is thinking
+    # 1) 現在の turn を再取得（White=1 のはず）
+    turn = game_data["game"].turn
+
+    # 2) White に合法手が無いならパス
+    #    （has_valid_move が False のときだけパス）
+    if not game_data["game"].has_valid_move(turn):
+        game_data["game"].turn = -1
+        socketio.emit("game_state", {
+            "board":   game_data["game"].board,
+            "turn":    -1,
+            "status":  "pass",
+            "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
+        }, room=game_id)
+        return
+
+    # 3) AI is thinking… を通知
     socketio.emit("ai_thinking", {}, room=game_id)
 
-    # B) 変更点1: 変更前の盤面をディープコピー
+    # 4) 反転検出用に盤面をコピー
     before = [row[:] for row in game_data["game"].board]
-    
-    # pick & apply the AI’s move
-    r, c   = game_data["ai"].choose_move(game_data["game"])
+
+    # 5) Minimax で最良手を探す
+    best = game_data["ai"].choose_move(game_data["game"])
+    print(f"[AI] minimax chose: {best}")  # デバッグログ
+
+    # ← ここを追加 →
+    valid = game_data["game"].valid_moves(turn)
+    # minimax が返した手が不正 or None のときは合法手から取得
+    if best not in valid:
+        print(f"[AI] chosen move {best} not in valid moves, falling back")
+        best = valid[0] if valid else None
+
+    # それでも None ならパス処理
+    if best is None:
+        game_data["game"].turn = -turn
+        socketio.emit("game_state", {
+            "board":   game_data["game"].board,
+            "turn":    game_data["game"].turn,
+            "status":  "pass",
+            "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
+        }, room=game_id)
+        return
+
+        # 正常に一手を打つ
+        r, c = best
+        print(f"[AI] FINAL move to apply: {best}")
+        ai_res = game_data["game"].make_move(r, c)
+        print(f"[AI] make_move status: {ai_res['status']}")
+        
+               # after ボードの状況を出力
+        print(f"[AI] board after:  {game_data['game'].board[r][c]}, turn now: {game_data['game'].turn}, ai_res: {ai_res}")
+
+    # 7) それでも見つからなければ最終パス
+    if best is None:
+        game_data["game"].turn = -1
+        socketio.emit("game_state", {
+            "board":   game_data["game"].board,
+            "turn":    -1,
+            "status":  "pass",
+            "players": [{"id": p.id, "name": p.name} for p in game_data["players"]]
+        }, room=game_id)
+        return
+
+    # 8) White の一手を打つ
+    r, c   = best
     ai_res = game_data["game"].make_move(r, c)
     after  = game_data["game"].board
-    
-    # 変更点2: 反転した石と新しい石を検出
-    flips = []
+
+    # 9) new_stone と flips リストを検出
     new_stone = None
+    flips     = []
     for y in range(8):
         for x in range(8):
-            # 新しい石の検出 (0 → 1)
-            if before[y][x] == 0 and after[y][x] == 1:
+            if before[y][x] == 0 and after[y][x] == turn:
                 new_stone = {"y": y, "x": x}
-            # 反転した石の検出 (-1 → 1)
-            elif before[y][x] == -1 and after[y][x] == 1:
+            elif before[y][x] != 0 and before[y][x] != after[y][x]:
                 flips.append({"y": y, "x": x})
 
-    # C) delay proportional to human flips
+    # 10) delay を置いてから emit
     delay = BASE_DELAY + PER_FLIP_SEC * len(flips)
     time.sleep(delay)
 
-    # D) 変更点3: 新しい石と反転情報を追加
-    ai_payload = {
+    payload = {
         "board":      after,
         "turn":       game_data["game"].turn,
         "last_move":  [r, c],
         "status":     ai_res["status"],
         "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]],
-        "new_stone":  new_stone,  # 新しい石の位置
-        "flips":      flips       # 反転した石のリスト
+        "new_stone":  new_stone,
+        "flips":      flips
     }
-    
     if ai_res["status"] == "game_over":
-        ai_payload["score"] = {
+        payload["score"] = {
             "white": int(ai_res["score"]["white"]),
             "black": int(ai_res["score"]["black"])
         }
 
-    socketio.emit("ai_move", ai_payload, room=game_id)
+    socketio.emit("ai_move", payload, room=game_id)
+
+
+
+
 
 
 

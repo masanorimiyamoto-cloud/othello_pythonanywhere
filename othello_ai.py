@@ -87,41 +87,54 @@ class OthelloAI:
         return score
 
     def choose_move(self, game: OthelloGame):
-        # 毎回 tt は使い回すため、深さ変わるなら必要に応じてクリアも検討
-        self.tt.clear()
+        # 毎回キャッシュは使わない前提でクリア
+        # self.tt.clear()
+
+        # ① まず現在の盤面での合法手一覧を出力
+        valid = game.valid_moves(game.turn)
+        print(f"[AI] ■turn={game.turn} の合法手: {valid}")
+
+        # ② minimax 呼び出し
         _, move = self.minimax(game, self.max_depth, -math.inf, math.inf, True)
+
+        if move not in game.valid_moves(game.turn):
+          return None
+        
+        print(f"[AI] → choose_move returns: {move}")
         return move
 
+    
     def minimax(self, game: OthelloGame, depth, alpha, beta, maximizing_player):
         # Transposition lookup
-        key = (tuple(sum(game.board, [])), game.turn, depth)
-        if key in self.tt:
-            return self.tt[key]
-
-        # Base case
-        if depth == 0 or not game.has_valid_move(game.turn):
+        #key = (tuple(sum(game.board, [])), game.turn, depth)
+        #if key in self.tt:
+           # return self.tt[key]
+        # depth, playerごとに合法手を出力
+        print(f"[AI][depth={depth}][maximizing={maximizing_player}] turn={game.turn} の手の候補:", game.valid_moves(game.turn))
+        # 双方に合法手がない場合も考慮する
+        if depth == 0 or (not game.has_valid_move(game.turn) and not game.has_valid_move(-game.turn)):
             val = self.evaluate(game)
-            self.tt[key] = (val, None)
+            #self.tt[key] = (val, None)
             return val, None
 
         best_move = None
         if maximizing_player:
             max_eval = -math.inf
-
-            # --- ムーブオーダリング: まず合法手リストを作る ---
             moves = []
             for r in range(8):
                 for c in range(8):
                     flips = game.stones_to_flip(r, c, game.turn)
                     if flips:
-                        # コーナー優先 + flip数大きい順
                         score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
                         moves.append((score, (r,c), flips))
-            # スコア降順
             moves.sort(key=lambda x: -x[0])
 
+            if not moves:  # 合法手なしの処理を明示的に追加
+                eval_score, _ = self.minimax(game, depth-1, alpha, beta, False)
+                #self.tt[key] = (eval_score, None)
+                return eval_score, None
+
             for _, (r,c), flips in moves:
-                # クローンして一手進める
                 clone = OthelloGame()
                 clone.board = [row[:] for row in game.board]
                 clone.turn  = game.turn
@@ -134,13 +147,11 @@ class OthelloAI:
                 if beta <= alpha:
                     break
 
-            self.tt[key] = (max_eval, best_move)
+            #self.tt[key] = (max_eval, best_move)
             return max_eval, best_move
 
         else:
             min_eval = math.inf
-
-            # --- ムーブオーダリング（相手なのでスコア昇順） ---
             moves = []
             for r in range(8):
                 for c in range(8):
@@ -148,8 +159,12 @@ class OthelloAI:
                     if flips:
                         score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
                         moves.append((score, (r,c), flips))
-            # スコア昇順
             moves.sort(key=lambda x: x[0])
+
+            if not moves:  # 合法手なしの処理を明示的に追加
+                eval_score, _ = self.minimax(game, depth-1, alpha, beta, True)
+                #self.tt[key] = (eval_score, None)
+                return eval_score, None
 
             for _, (r,c), flips in moves:
                 clone = OthelloGame()
@@ -164,9 +179,5 @@ class OthelloAI:
                 if beta <= alpha:
                     break
 
-            self.tt[key] = (min_eval, best_move)
-            return min_eval, best_move
-
-    def choose_move(self, game: OthelloGame):
-        _, move = self.minimax(game, self.max_depth, -math.inf, math.inf, True)
-        return move
+            #self.tt[key] = (min_eval, best_move)
+        return min_eval, best_move
