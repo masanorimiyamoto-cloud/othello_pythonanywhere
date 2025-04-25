@@ -5,58 +5,131 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   <style>
     /* --- 基本スタイル --- */
-    #board { display: grid; grid-template-columns: repeat(8, 50px); gap: 2px; margin: 20px 0; }
+    /* ゲームコンテナ用の新しいスタイルを追加 */
+    .game-container {
+      max-width: 500px; /* 適切な最大幅を設定 */
+      margin: 0 auto; /* 中央揃え */
+      padding: 20px;
+      background-color: #f5f5f5; /* 背景色 */
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    /* 既存の#boardスタイルを修正 */
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 60px);
+      gap: 2px;
+      margin: 20px auto; /* 中央揃え */
+      background-color: #1a6d3f;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      width: fit-content; /* 内容に合わせた幅 */
+    }
+    
     .cell {
-      width: 50px; height: 50px;
+      width: 60px; 
+      height: 60px;
       background-color: #2e8b57;
-      display: flex; justify-content: center; align-items: center;
+      display: flex; 
+      justify-content: center; 
+      align-items: center;
       cursor: pointer;
-      perspective: 600px; /* 3D フリップ用 */
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
     }
-    .stone { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #333; }
-    .black { background-color: #222; }
-    .white { background-color: #fff; }
-    #status, #score { font-size: 1.2em; margin: 10px 0; }
-    #game-controls { margin: 20px 0; }
-    input, button, select { padding: 8px; margin-right: 10px; }
-
-    /* --- 置かれた石の強調 --- */
-    .cell.placed-move {
-      box-shadow: 0 0 0 4px rgba(255,0,0,0.8);
-      animation: pulse 0.8s ease-out;
+    
+    .cell::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 60%);
+      pointer-events: none;
     }
-    @keyframes pulse {
-      0%   { box-shadow: 0 0 0 4px rgba(255,0,0,0.8); }
-      100% { box-shadow: 0 0 0   rgba(255,0,0,0); }
-    }
-
-    /* --- フリップアニメ CSS --- */
+    
+    /* --- 柔らかく立体的なコマ --- */
     .stone {
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       border-radius: 50%;
-      backface-visibility: hidden;
+      position: relative;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 
+        0 2px 4px rgba(0,0,0,0.3),
+        inset 0 2px 2px rgba(255,255,255,0.1);
+    }
+    
+    .stone::before {
+      content: '';
+      position: absolute;
+      top: 5%;
+      left: 10%;
+      width: 80%;
+      height: 40%;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 70%);
+      filter: blur(1px);
+      pointer-events: none;
+    }
+    
+    .black { 
+      background: radial-gradient(circle at 30% 30%, #444 0%, #111 90%);
+      border: 1px solid #000;
+    }
+    
+    .white { 
+      background: radial-gradient(circle at 30% 30%, #fff 0%, #ddd 90%);
+      border: 1px solid #ccc;
+    }
+    
+    /* ホバー時のエフェクト */
+    .cell:not(.disabled):hover .stone {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    }
+    
+    /* --- フリップアニメーションの改良 --- */
+    .stone.flipping {
+      animation: flipBlackToWhite 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
       transform-style: preserve-3d;
     }
-    .stone.flipping {
-      animation: flipBlackToWhite 0.6s ease-in-out forwards;
-    }
+    
     .stone.flipping.reverse {
-      animation: flipWhiteToBlack 0.6s ease-in-out forwards;
+      animation: flipWhiteToBlack 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
+    
     @keyframes flipBlackToWhite {
-      0%   { transform: rotateY(0deg);   background-color: #222; }
-      50%  { transform: rotateY(90deg);  background-color: #666; }
-      100% { transform: rotateY(180deg); background-color: #fff; }
+      0%   { transform: rotateY(0deg);   background: radial-gradient(circle at 30% 30%, #444 0%, #111 90%); }
+      49%  { background: #666; }
+      50%  { transform: rotateY(90deg);  background: #666; }
+      100% { transform: rotateY(180deg); background: radial-gradient(circle at 30% 30%, #fff 0%, #ddd 90%); }
     }
+    
     @keyframes flipWhiteToBlack {
-      0%   { transform: rotateY(0deg);   background-color: #fff; }
-      50%  { transform: rotateY(90deg);  background-color: #666; }
-      100% { transform: rotateY(180deg); background-color: #222; }
+      0%   { transform: rotateY(0deg);   background: radial-gradient(circle at 30% 30%, #fff 0%, #ddd 90%); }
+      49%  { background: #666; }
+      50%  { transform: rotateY(90deg);  background: #666; }
+      100% { transform: rotateY(180deg); background: radial-gradient(circle at 30% 30%, #444 0%, #111 90%); }
+    }
+    
+    /* --- 置かれた石の強調 --- */
+    .cell.placed-move .stone {
+      animation: pulse 0.8s ease-out;
+    }
+    
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 6px rgba(255,200,0,0.6); transform: scale(1.1); }
+      100% { box-shadow: 0 2px 4px rgba(0,0,0,0.3); transform: scale(1); }
     }
   </style>
 </head>
 <body>
+<div class="game-container"> 
   <div id="game-controls">
     <select id="ai-level">
       <option value="1" selected>Level 1 (Easy)</option>
@@ -70,7 +143,7 @@
     <input id="room-id" placeholder="Room ID">
     <button id="join-room">Join Room</button>
   </div>
-
+</div>
   <div id="status">Waiting to join game...</div>
   <div id="score"></div>
   <div id="board"></div>
