@@ -2,10 +2,10 @@ from othello import OthelloGame
 import math
 
 class OthelloAI:
-    LEVEL_DEPTH = {1:1, 2:2 ,3:3 ,4:4 ,5:5 }
+    LEVEL_DEPTH = {1:1, 2:2 ,3:3}
 
-    def __init__(self, level=3):
-        self.max_depth = self.LEVEL_DEPTH.get(level, 4)
+    def __init__(self, level=1):
+        self.max_depth = self.LEVEL_DEPTH.get(level, 1)
     # …あとはそのまま…
 
         self.value_table = [
@@ -18,10 +18,8 @@ class OthelloAI:
             [-20, -50, -2, -2, -2, -2, -50, -20],
             [100, -20, 10, 5, 5, 10, -20, 100]
         ]
-     # ← ここから追加 ↓
-        # Transposition Table: {(board_tuple, turn, depth): (eval, best_move)}
-        self.tt = {}
-        # ← ここまで追加 ↑
+     # トランスポジションテーブル（キャッシュ用）
+        self.tt = {}  # key: (board_tuple, turn, depth, maximizing_player)
     def evaluate(self, game: OthelloGame) -> float:
         board = game.board
         white_count = black_count = 0
@@ -87,8 +85,7 @@ class OthelloAI:
         return score
 
     def choose_move(self, game: OthelloGame):
-        # 毎回キャッシュは使わない前提でクリア
-        # self.tt.clear()
+        
 
         # ① まず現在の盤面での合法手一覧を出力
         valid = game.valid_moves(game.turn)
@@ -96,88 +93,88 @@ class OthelloAI:
 
         # ② minimax 呼び出し
         _, move = self.minimax(game, self.max_depth, -math.inf, math.inf, True)
+        valid = game.valid_moves(game.turn)
 
-        if move not in game.valid_moves(game.turn):
-          return None
-        
+        # if minimax failed to pick a valid move, just take the first legal one
+        if move not in valid:
+                    move = valid[0] if valid else None
+
         print(f"[AI] → choose_move returns: {move}")
         return move
+
 
     
     def minimax(self, game: OthelloGame, depth, alpha, beta, maximizing_player):
         # Transposition lookup
-        #key = (tuple(sum(game.board, [])), game.turn, depth)
-        #if key in self.tt:
-           # return self.tt[key]
+        board_tuple = tuple(tuple(row) for row in game.board)
+        key = (board_tuple, game.turn, depth, maximizing_player)
+        if key in self.tt:
+            return self.tt[key]
+
         # depth, playerごとに合法手を出力
         print(f"[AI][depth={depth}][maximizing={maximizing_player}] turn={game.turn} の手の候補:", game.valid_moves(game.turn))
-        # 双方に合法手がない場合も考慮する
+        
+        # 終端条件
         if depth == 0 or (not game.has_valid_move(game.turn) and not game.has_valid_move(-game.turn)):
             val = self.evaluate(game)
-            #self.tt[key] = (val, None)
+            self.tt[key] = (val, None)
             return val, None
 
         best_move = None
         if maximizing_player:
             max_eval = -math.inf
-            moves = []
-            for r in range(8):
-                for c in range(8):
-                    flips = game.stones_to_flip(r, c, game.turn)
-                    if flips:
-                        score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
-                        moves.append((score, (r,c), flips))
-            moves.sort(key=lambda x: -x[0])
-
-            if not moves:  # 合法手なしの処理を明示的に追加
+            moves = self.get_sorted_moves(game, 1)
+            
+            if not moves:
                 eval_score, _ = self.minimax(game, depth-1, alpha, beta, False)
-                #self.tt[key] = (eval_score, None)
+                self.tt[key] = (eval_score, None)
                 return eval_score, None
 
             for _, (r,c), flips in moves:
-                clone = OthelloGame()
-                clone.board = [row[:] for row in game.board]
-                clone.turn  = game.turn
+                clone = game.copy()  # 効率的なコピーメソッド推奨
                 clone.make_move(r, c)
-
                 eval_score, _ = self.minimax(clone, depth-1, alpha, beta, False)
+                
                 if eval_score > max_eval:
                     max_eval, best_move = eval_score, (r, c)
                 alpha = max(alpha, eval_score)
                 if beta <= alpha:
                     break
 
-            #self.tt[key] = (max_eval, best_move)
+            self.tt[key] = (max_eval, best_move)
             return max_eval, best_move
 
         else:
             min_eval = math.inf
-            moves = []
-            for r in range(8):
-                for c in range(8):
-                    flips = game.stones_to_flip(r, c, game.turn)
-                    if flips:
-                        score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
-                        moves.append((score, (r,c), flips))
-            moves.sort(key=lambda x: x[0])
-
-            if not moves:  # 合法手なしの処理を明示的に追加
+            moves = self.get_sorted_moves(game, -1)
+            
+            if not moves:
                 eval_score, _ = self.minimax(game, depth-1, alpha, beta, True)
-                #self.tt[key] = (eval_score, None)
+                self.tt[key] = (eval_score, None)
                 return eval_score, None
 
             for _, (r,c), flips in moves:
-                clone = OthelloGame()
-                clone.board = [row[:] for row in game.board]
-                clone.turn  = game.turn
+                clone = game.copy()
                 clone.make_move(r, c)
-
                 eval_score, _ = self.minimax(clone, depth-1, alpha, beta, True)
+                
                 if eval_score < min_eval:
                     min_eval, best_move = eval_score, (r, c)
                 beta = min(beta, eval_score)
                 if beta <= alpha:
                     break
 
-            #self.tt[key] = (min_eval, best_move)
-        return min_eval, best_move
+            self.tt[key] = (min_eval, best_move)
+            return min_eval, best_move
+
+    def get_sorted_moves(self, game, player):
+        """合法手のソート処理を共通化"""
+        moves = []
+        for r in range(8):
+            for c in range(8):
+                flips = game.stones_to_flip(r, c, player)
+                if flips:
+                    score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
+                    moves.append((score, (r,c), flips))
+        moves.sort(reverse=(player == 1))
+        return moves

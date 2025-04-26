@@ -19,7 +19,16 @@ class OthelloGame:
     @staticmethod
     def inside_board(r: int, c: int) -> bool:
         return 0 <= r < 8 and 0 <= c < 8
-
+    def copy(self):
+        """このゲーム状態のディープコピーを返す"""
+        new_game = OthelloGame()
+        # 盤面は行ごとにコピー
+        new_game.board = [row[:] for row in self.board]
+        # 手番もそのまま引き継ぎ
+        new_game.turn = self.turn
+        # もし他に持っている状態があればここでコピー
+        # 例: new_game.history = self.history.copy()
+        return new_game
     def stones_to_flip(self, row: int, col: int, turn: int) -> List[Tuple[int, int]]:
         flips = []
         for dr, dc in self.DIRECTIONS:
