@@ -179,6 +179,30 @@
 
   {% raw %}
   <script>
+    // 効果音をプリロード
+    // 静的ファイルのURLを自動生成
+    // ① クリック音のバリエーションをハードコード
+    const placeSound = new Audio('/static/sounds/place.mp3');
+
+    
+    // ① フリップ音のバリエーションをハードコードで列挙
+      const flipSoundFiles = [
+        '/static/sounds/flip1.mp3',
+        '/static/sounds/flip2.mp3',
+        '/static/sounds/flip3.mp3'
+      ];
+
+      // ② Audio オブジェクトをあらかじめ生成しておく
+      const flipSounds = flipSoundFiles.map(src => {
+        const audio = new Audio(src);
+        audio.loop = false;
+        return audio;
+      });
+
+
+    console.log("placeSound.src =", placeSound.src);
+   
+   
     // 1. グローバル変数
     let isAIGame      = false;
     const socket      = io();
@@ -265,6 +289,10 @@
 
     // 5. 最後に置かれた手強調
     function highlightLastMove(r, c) {
+       // 効果音再生
+      placeSound.currentTime = 0;
+      placeSound.play();
+
       if (prevLastMove) {
         const [pr,pc] = prevLastMove;
         document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`)
@@ -319,6 +347,11 @@
       const perDelay = 200, duration = 600;
       flips.forEach(({y,x},i)=>{
         setTimeout(()=>{
+          // フリップ音
+          
+          playFlipSound();
+          
+      
           const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
           const stone = cell?.querySelector('.stone');
           if (!stone) return;
@@ -389,7 +422,16 @@
       }
       return { black, white };
     }
-
+    
+    // ③ ヘルパー関数：呼び出すとランダムにフリップ音を鳴らす
+    function playFlipSound() {
+      // ランダムに１つ選ぶ
+      const idx = Math.floor(Math.random() * flipSounds.length);
+      // cloneNode で別インスタンスを作って再生
+      const s = flipSounds[idx].cloneNode();
+      s.currentTime = 0;
+      s.play();
+    }
     // スコア表示更新関数
     function updateScoreDisplay(scores) {
       document.getElementById('black-score').textContent = scores.black;
