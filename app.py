@@ -294,7 +294,11 @@ def run_ai_move(game_id):
         "status":     ai_res["status"],
         "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]],
         "new_stone":  new_stone,
-        "flips":      flips
+        "flips":      flips,
+        "scores": {
+            "white": sum(cell == 1 for row in after for cell in row),
+            "black": sum(cell == -1 for row in after for cell in row)
+        }
     }
     if ai_res["status"] == "game_over":
         payload["score"] = {

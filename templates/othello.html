@@ -102,7 +102,33 @@
     .stone.flipping.reverse {
       animation: flipWhiteToBlack 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    
+        #score-board {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
+      border-radius: 10px;
+      color: white;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .score {
+      font-size: 20px;
+      margin: 5px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #black-score, #white-score {
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+.black { color: #fff; }
+.white { color: #fff; }
     @keyframes flipBlackToWhite {
       0%   { transform: rotateY(0deg);   background: radial-gradient(circle at 30% 30%, #444 0%, #111 90%); }
       49%  { background: #666; }
@@ -144,7 +170,11 @@
   </div>
 </div>
   <div id="status">Waiting to join game...</div>
-  <div id="score"></div>
+  <!-- 既存の#score要素を以下のように変更 -->
+  <div id="score-board">
+    <div class="score black">⚫ Black: <span id="black-score">2</span></div>
+    <div class="score white">⚪ White: <span id="white-score">2</span></div>
+  </div>
   <div id="board"></div>
 
   {% raw %}
@@ -315,11 +345,12 @@
         txt = `Turn: ${t}` + (turn===yourColor?' (Your move)':'');
       }
       document.getElementById('status').textContent = txt;
-      document.getElementById('score').textContent =
-        data.status==='game_over'
-          ? `Final Score — W:${data.score.white} B:${data.score.black}`
-          : '';
+    
+      // 新しいスコア表示
+      const scores = calculateScores(data.board);
+      updateScoreDisplay(scores);
     }
+
 
     // 10. ゲームオーバー画面
     function showGameOverScreen(score){
@@ -347,7 +378,27 @@
       document.getElementById('restart-btn')
         .addEventListener('click', ()=> location.reload());
     }
+        // スコア計算関数
+    function calculateScores(board) {
+      let black = 0, white = 0;
+      for (let row of board) {
+        for (let cell of row) {
+          if (cell === -1) black++;
+          if (cell === 1) white++;
+        }
+      }
+      return { black, white };
+    }
 
+    // スコア表示更新関数
+    function updateScoreDisplay(scores) {
+      document.getElementById('black-score').textContent = scores.black;
+      document.getElementById('white-score').textContent = scores.white;
+    }
+
+ 
+    
+    
     // 11. ソケットイベント
     socket.on('room_created', data=>{
       currentGameId = data.game_id;
@@ -435,6 +486,10 @@
 
         lastBoard = newBoard.map(row => row.slice());
       }, delay);
+
+        // スコア更新を追加
+      const scores = calculateScores(data.board);
+      updateScoreDisplay(scores);
     });
 
 
