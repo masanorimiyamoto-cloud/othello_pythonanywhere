@@ -147,7 +147,18 @@
     .cell.placed-move .stone {
       animation: pulse 0.8s ease-out;
     }
-    
+    /* キーフレーム定義 */
+@keyframes dropIn {
+  0%   { transform: translateY(-50px) scale(0.5); opacity: 0; box-shadow: none; }
+  60%  { transform: translateY(5px) scale(1.05); opacity: 1; box-shadow: 0 8px 12px rgba(0,0,0,0.2); }
+  100% { transform: translateY(0) scale(1); opacity: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+}
+
+    /* クラスを追加 */
+    .stone.drop-in {
+      animation: dropIn 0.4s ease-out forwards;
+    }
+
     @keyframes pulse {
       0%   { box-shadow: 0 0 0 6px rgba(255,200,0,0.6); transform: scale(1.1); }
       100% { box-shadow: 0 2px 4px rgba(0,0,0,0.3); transform: scale(1); }
@@ -158,9 +169,10 @@
 <div class="game-container"> 
   <div id="game-controls">
     <select id="ai-level">
-      <option value="1" selected>Level 1(Easy)</option>
-      <option value="2">Level 2(mid)</option>
-      <option value="3">Level 3(Expert)</option>
+      <option value="0.5">Level 0.5(Easy)</option>
+      <option value="1" >Level 1(mid)</option>
+      <option value="2">Level 2(Expert)</option>
+      <option value="3">Level 3(Pro)</option>
       
     </select>
     <button id="start-ai-game">Start vs AI</button>
@@ -185,24 +197,66 @@
     const placeSound = new Audio('/static/sounds/place.mp3');
 
     
-    // ① フリップ音のバリエーションをハードコードで列挙
-      const flipSoundFiles = [
-        '/static/sounds/flip1.mp3',
-        '/static/sounds/flip2.mp3',
-        '/static/sounds/flip3.mp3',
-        '/static/sounds/flip4.mp3',
-        '/static/sounds/flip5.mp3'
-      ];
+      // 音声ファイルの初期化例
+function makeAudioList(paths) {
+  return paths.map(p => new Audio(p));
+}
 
-      // ② Audio オブジェクトをあらかじめ生成しておく
-      const flipSounds = flipSoundFiles.map(src => {
-        const audio = new Audio(src);
-        audio.loop = false;
-        return audio;
-      });
+  const audPoor = makeAudioList(['/static/sounds/poor1.mp3', '/static/sounds/poor2.mp3']);
+  const audNormal = makeAudioList(['/static/sounds/norm1.mp3', '/static/sounds/norm2.mp3']);
+  const audGood = makeAudioList(['/static/sounds/good1.mp3', '/static/sounds/good2.mp3']);
+  //const flipSounds = makeAudioList(['/static/sounds/flip1.mp3', '/static/sounds/flip2.mp3']);
+    
+  // プールをオブジェクトで管理
+  const audioPools = {
+    audPoor: audPoor,
+    audNormal: audNormal,
+    audGood: audGood
+  };
+
+  // プール名を取得するヘルパー関数
+  function getPoolName(poolArray) {
+    return Object.keys(audioPools).find(key => 
+      audioPools[key] === poolArray
+    ) || 'unknown';
+  }
 
 
-    console.log("placeSound.src =", placeSound.src);
+function normalizeEvalScore(score, turn) {
+  // 黒の評価値はそのまま、白の評価値は符号反転
+  const adjustedScore = turn === -1 ? score : -score;
+  // 評価値を-100～100の範囲に正規化（仮定）
+  const clamped = Math.min(100, Math.max(-100, adjustedScore));
+  // 0～200にシフトして返却
+  return clamped + 100;
+}
+
+function playRatedFlipSound(score, turn) {
+    const normalized = normalizeEvalScore(score, turn);
+    
+    // デバッグ用詳細ログ
+    
+    
+        // 閾値調整（範囲を厳密化）
+        let pool;
+        if (normalized < 50) {         // 0-30: 非常に悪い手
+            pool = audPoor;
+        
+        } else if (normalized < 120) { // 70-130: 普通
+            pool = audNormal;
+      
+        } else {                       // 170-200: 非常に良い手
+            pool = audGood;
+        }
+        
+        // 音声再生処理...
+    
+     // コンソール表示改善
+      console.log(`Normalized: ${normalized} | Pool: ${getPoolName(pool)} | Turn: ${turn}`);
+      const s = pool[Math.floor(Math.random()*pool.length)].cloneNode();
+      s.currentTime = 0;
+      s.play();
+     }
    
    
     // 1. グローバル変数
@@ -243,7 +297,8 @@
 
     document.getElementById('start-ai-game')
       .addEventListener('click', () => {
-        const level = +document.getElementById('ai-level').value;
+        // valueを数値に変換（0.5を正しく取得するため）
+        const level = parseFloat(document.getElementById('ai-level').value);
         const rid   = document.getElementById('room-id').value.trim() || null;
         isAIGame  = true;
         yourColor = -1;
@@ -291,21 +346,33 @@
 
     // 5. 最後に置かれた手強調
     function highlightLastMove(r, c) {
-       // 効果音再生
+      // 効果音再生
       placeSound.currentTime = 0;
       placeSound.play();
 
+      // 前の手のハイライト & ドロップイン解除
       if (prevLastMove) {
-        const [pr,pc] = prevLastMove;
-        document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`)
-                ?.classList.remove('last-move');
+        const [pr, pc] = prevLastMove;
+        const prevCell = document.querySelector(`.cell[data-row="${pr}"][data-col="${pc}"]`);
+        prevCell?.classList.remove('last-move');
+        const prevStone = prevCell?.querySelector('.stone');
+        prevStone?.classList.remove('drop-in');
       }
+
+      // 新たな手のハイライト & ドロップイン再生
       const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
       if (cell) {
+        const stone = cell.querySelector('.stone');
+        if (stone) {
+          stone.classList.add('drop-in');
+          // ドロップインアニメ終了後にクラスを除去
+          setTimeout(() => stone.classList.remove('drop-in'), 400);
+        }
         cell.classList.add('last-move');
-        prevLastMove = [r,c];
+        prevLastMove = [r, c];
       }
     }
+
 
     // 6. 盤面描画
     function updateBoard(board, turn) {
@@ -345,14 +412,17 @@
     }
 
     // 8. フリップアニメ
-    function animateFlips(flips){
+    function animateFlips(flips, evalValue, turn){
       const perDelay = 200, duration = 600;
       flips.forEach(({y,x},i)=>{
         setTimeout(()=>{
           // フリップ音
           
-          playFlipSound();
-          
+          //playFlipSound();
+          // 白のターン時は音を再生しない
+          if(turn !== 1) { // 1は白を表す
+            playRatedFlipSound(evalValue, turn);
+          }
       
           const cell  = document.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
           const stone = cell?.querySelector('.stone');
@@ -426,14 +496,14 @@
     }
     
     // ③ ヘルパー関数：呼び出すとランダムにフリップ音を鳴らす
-    function playFlipSound() {
+    //function playFlipSound() {
       // ランダムに１つ選ぶ
-      const idx = Math.floor(Math.random() * flipSounds.length);
+      //const idx = Math.floor(Math.random() * flipSounds.length);
       // cloneNode で別インスタンスを作って再生
-      const s = flipSounds[idx].cloneNode();
-      s.currentTime = 0;
-      s.play();
-    }
+      //const s = flipSounds[idx].cloneNode();
+      //s.currentTime = 0;
+      //s.play();
+    //}
     // スコア表示更新関数
     function updateScoreDisplay(scores) {
       document.getElementById('black-score').textContent = scores.black;
@@ -484,7 +554,19 @@
       }
 
       const newBoard = data.board;
+      // 「人間の手」かつ評価値が渡ってきていれば、先に評価音を鳴らす
+      // 評価値がある場合だけ音を鳴らす
+      if (typeof data.eval === 'number') {
+        // game_stateイベント内
+      playRatedFlipSound(data.eval, data.last_move_color);  // 最後に動かした色を渡す
 
+  // ai_moveイベント内
+      playRatedFlipSound(data.eval, 1);  // AIは常に白なので1を渡す
+      } else if (data.last_move_color === yourColor) {
+        // もし自分の手なら、音を鳴らす
+        placeSound.currentTime = 0;
+        placeSound.play();
+      }
       // ──────────────────────────────────────────
       // 2) 返る石を抽出 → “置かれた一手”を先に描画 → フリップアニメ
       const flips = [];
@@ -500,20 +582,28 @@
 
       if (Array.isArray(data.last_move)) {
         const [r, c] = data.last_move;
+        // ① ハイライト枠だけ付け替え
         highlightLastMove(r, c);
+  
+        // ② 新しい石を drop-in で落とす
         const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
         if (cell) {
-          cell.innerHTML = '';
+          cell.innerHTML = ''; // 既存石をクリア
           const v = newBoard[r][c];
-          const stone = document.createElement('div');
-          stone.className = `stone ${v===-1?'black':'white'} placed-move`;
-          cell.appendChild(stone);
-          setTimeout(() => stone.classList.remove('placed-move'), 800);
-        }
+         const stone = document.createElement('div');
+          // placed-move（pulse） と drop-in（落下）を両方クラス指定
+         stone.className = `stone ${v===-1?'black':'white'} placed-move drop-in`;
+         cell.appendChild(stone);
+         // drop-in は 0.4s なので 400ms 後にクラス除去
+          setTimeout(() => stone.classList.remove('drop-in'), 400);
+          // pulse は従来通り 800ms 後
+         setTimeout(() => stone.classList.remove('placed-move'), 800);
+       }
       }
 
-      const delay = animateFlips(flips);
-
+      // animateFlips呼び出し時にターン情報を追加
+      const delay = animateFlips(flips, data.eval, data.turn); // 第3引数にdata.turnを追加
+   
       // ──────────────────────────────────────────
       // 3) アニメ後に盤面全体を再描画 & ターン表示
       // ──────────────────────────────────────────
@@ -534,7 +624,7 @@
         // スコア更新を追加
       const scores = calculateScores(data.board);
       updateScoreDisplay(scores);
-    });
+  });
 
 
     socket.on('ai_thinking', ()=>{
@@ -554,13 +644,20 @@
         cell.appendChild(stone);
         setTimeout(() => stone.classList.remove('placed-move'), 800);
       }
-
+      // AI の一手にも評価音を鳴らす
+      
+      if (data.eval !== undefined) {
+        //playRatedFlipSound(data.eval);
+        // AI は白 (turn===1) なので 1 を渡すか、サーバー送信の turn を渡す
++        playRatedFlipSound(data.eval, data.turn ?? 1);
+      }
       // 2) 反転アニメーション
       const flips = data.flips || [];
-      const delay = animateFlips(flips);
-
+      //const delay = animateFlips(flips);
+      // 白のターン時は音を再生しない（AIが白の場合）
+      const delay = animateFlips(flips, data.eval, 1); // 第3引数に1（白）を指定
       // 3) アニメ後に盤面更新とステータス表示
-      setTimeout(() => {
+        setTimeout(() => {
         updateBoard(data.board, data.turn);
         updateStatusAndHighlight(data, data.turn);
         lastBoard = data.board.map(row => row.slice());

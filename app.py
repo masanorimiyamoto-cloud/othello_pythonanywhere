@@ -185,12 +185,16 @@ def handle_move(data):
     # 1) Apply the human move and broadcast immediately
     
     result = game_data["game"].make_move(row, col)
+    # handle_move関数内のhuman_payloadを修正
     human_payload = {
-        "board":      game_data["game"].board,
-        "turn":       game_data["game"].turn,
-        "last_move":  [row, col],
-        "status":     result["status"],
-        "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]]
+    "board": game_data["game"].board,
+    "turn": game_data["game"].turn,
+    "last_move": [row, col],
+    "status": result["status"],
+    "players": [{"id": p.id, "name": p.name} for p in game_data["players"]],
+    # 評価値と手番情報を追加
+    "eval": -game_data["ai"].evaluate(game_data["game"]) if "ai" in game_data else 0,
+    "last_move_color": -1  # 人間は常に黒
     }
     emit("game_state", human_payload, room=game_id)
 
@@ -256,7 +260,7 @@ def run_ai_move(game_id):
         
                # after ボードの状況を出力
         print(f"[AI] board after:  {game_data['game'].board[r][c]}, turn now: {game_data['game'].turn}, ai_res: {ai_res}")
-
+    
     # 7) それでも見つからなければ最終パス
     if best is None:
         game_data["game"].turn = -1
@@ -272,7 +276,8 @@ def run_ai_move(game_id):
     r, c   = best
     ai_res = game_data["game"].make_move(r, c)
     after  = game_data["game"].board
-
+    # 評価値を取得するために一時的に評価
+    eval_score = game_data["ai"].evaluate(game_data["game"])
     # 9) new_stone と flips リストを検出
     new_stone = None
     flips     = []
@@ -295,6 +300,8 @@ def run_ai_move(game_id):
         "players":    [{"id": p.id, "name": p.name} for p in game_data["players"]],
         "new_stone":  new_stone,
         "flips":      flips,
+        "eval": -eval_score, # 評価値の符号を反転（AIは白のため）
+        "last_move_color": 1,  # AIは常に白
         "scores": {
             "white": sum(cell == 1 for row in after for cell in row),
             "black": sum(cell == -1 for row in after for cell in row)

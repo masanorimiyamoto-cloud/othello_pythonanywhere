@@ -1,10 +1,13 @@
 from othello import OthelloGame
 import math
-
+import random # この行を追加
 class OthelloAI:
-    LEVEL_DEPTH = {1:1, 2:2 ,3:3}
-
-    def __init__(self, level=1):
+     # 深さの設定を変更（レベル0.5追加）
+    LEVEL_DEPTH = {0.5: 1, 1:1, 2:2, 3:3}  # 変更
+    # 0.5は簡易評価、1は簡易評価+minimax、2以上は通常のminimax
+    
+    def __init__(self, level=0.5):
+        self.level = level  # この行を追加
         self.max_depth = self.LEVEL_DEPTH.get(level, 1)
     # …あとはそのまま…
 
@@ -66,13 +69,17 @@ class OthelloAI:
                         frontier_penalty += -1 if board[r][c] == 1 else +1
                         break
 
-        # 5) 動的重み付け
-        if stone_count < 20:       # 序盤
-            w_pos, w_mob, w_cor, w_fro, w_diff = 2.5,  5.0, 50.0, 1.0, 1.0
-        elif stone_count < 50:     # 中盤
-            w_pos, w_mob, w_cor, w_fro, w_diff = 2.0,  4.0, 60.0, 0.5, 2.0
-        else:                      # 終盤
-            w_pos, w_mob, w_cor, w_fro, w_diff = 1.0,  2.0, 80.0, 0.1, 5.0
+        # 5) 動的重み付けの条件分岐を追加
+        if self.level == 0.5:  # レベル0.5用の簡易評価
+            w_pos, w_mob, w_cor, w_fro, w_diff = 1.0, 0.5, 0.0, 0.0, 1.0
+        else:
+            # 既存の動的重み付けロジック
+            if stone_count < 20:
+                w_pos, w_mob, w_cor, w_fro, w_diff = 2.5, 5.0, 50.0, 1.0, 1.0
+            elif stone_count < 50:
+                w_pos, w_mob, w_cor, w_fro, w_diff = 2.0, 4.0, 60.0, 0.5, 2.0
+            else:
+                w_pos, w_mob, w_cor, w_fro, w_diff = 1.0, 2.0, 80.0, 0.1, 5.0
 
         # 総合スコア
         score = (
@@ -85,8 +92,31 @@ class OthelloAI:
         return score
 
     def choose_move(self, game: OthelloGame):
-        
+        # レベル0.5用の簡易選択ロジック
+        if self.level == 0.5:
+            valid = game.valid_moves(game.turn)
+            if not valid:
+                return None
+            
+            # 30%の確率で完全ランダム選択
+            if random.random() < 0.3:
+                return random.choice(valid)
+            
+            # 70%で簡易評価ベースの選択
+            best_score = -math.inf
+            best_moves = []
+            for r, c in valid:
+                clone = game.copy()
+                clone.make_move(r, c)
+                score = self.evaluate(clone)
+                if score > best_score:
+                    best_score = score
+                    best_moves = [(r, c)]
+                elif score == best_score:
+                    best_moves.append((r, c))
+            return random.choice(best_moves) if best_moves else None
 
+        # レベル1以上のAIは minimax を使用
         # ① まず現在の盤面での合法手一覧を出力
         valid = game.valid_moves(game.turn)
         print(f"[AI] ■turn={game.turn} の合法手: {valid}")
@@ -168,13 +198,29 @@ class OthelloAI:
             return min_eval, best_move
 
     def get_sorted_moves(self, game, player):
-        """合法手のソート処理を共通化"""
-        moves = []
-        for r in range(8):
-            for c in range(8):
-                flips = game.stones_to_flip(r, c, player)
-                if flips:
-                    score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
-                    moves.append((score, (r,c), flips))
-        moves.sort(reverse=(player == 1))
-        return moves
+         """合法手のソート処理を共通化"""
+         moves = []
+         for r in range(8):
+                for c in range(8):
+                    flips = game.stones_to_flip(r, c, player)
+                    if flips:
+                        if self.level == 0.5:
+                            score = len(flips)  # コーナー優先なし
+                        else:
+                            score = (1000 if (r,c) in [(0,0),(0,7),(7,0),(7,7)] else 0) + len(flips)
+                        moves.append((score, (r,c), flips))
+
+            # レベル0.5用の処理を適切な位置に移動
+         if self.level == 0.5:
+                random.shuffle(moves)  # ランダムシャッフル
+         else:
+                moves.sort(reverse=(player == 1))
+            
+         return moves
+
+        
+    def evaluate_move(self, game, move):
+        """与えられた move を実行したときの評価値を返す"""
+        clone = game.clone()
+        clone.make_move(*move)
+        return self.evaluate(clone)
