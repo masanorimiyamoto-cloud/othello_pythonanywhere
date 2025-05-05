@@ -649,7 +649,7 @@ function playRatedFlipSound(score, turn) {
       if (data.eval !== undefined) {
         //playRatedFlipSound(data.eval);
         // AI は白 (turn===1) なので 1 を渡すか、サーバー送信の turn を渡す
-+        playRatedFlipSound(data.eval, data.turn ?? 1);
+        //playRatedFlipSound(data.eval, data.turn ?? 1);
       }
       // 2) 反転アニメーション
       const flips = data.flips || [];
